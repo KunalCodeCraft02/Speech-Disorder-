@@ -119,7 +119,10 @@ class DspSessionConnection extends EventEmitter {
       return;
     }
 
-    const delay = env.dsp.reconnectBaseDelayMs * 2 ** this.reconnectAttempts;
+    const delay = Math.min(
+      env.dsp.reconnectBaseDelayMs * 2 ** this.reconnectAttempts,
+      env.dsp.reconnectMaxDelayMs
+    );
     this.reconnectAttempts += 1;
 
     setTimeout(() => {

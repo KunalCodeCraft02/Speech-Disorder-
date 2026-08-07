@@ -1,10 +1,18 @@
 import { io, type Socket } from 'socket.io-client';
+import { tokenStore } from './api';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL ?? 'http://localhost:4000';
 
+// `auth` is a callback, not a static object: Socket.IO re-invokes it on
+// every (re)connection attempt, so a reconnect after the 15-minute access
+// token has expired (a dropped connection, screen lock, Render idling)
+// picks up whatever's currently in tokenStore -- which the axios refresh
+// interceptor keeps current -- instead of replaying the token that was
+// live when this socket was first created and failing forever with
+// "jwt expired".
 function connect(namespace: string, accessToken: string): Socket {
   return io(`${SOCKET_URL}${namespace}`, {
-    auth: { token: accessToken },
+    auth: (cb) => cb({ token: tokenStore.getAccess() ?? accessToken }),
     transports: ['websocket', 'polling'],
     reconnection: true,
     reconnectionAttempts: Infinity,

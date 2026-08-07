@@ -29,8 +29,15 @@ const schema = Joi.object({
   // process, unlike opening a connection, so this gets its own, much more
   // generous budget instead of reusing DSP_CONNECT_TIMEOUT_MS.
   DSP_CALIBRATION_TIMEOUT_MS: Joi.number().default(30000),
-  DSP_MAX_RECONNECT_ATTEMPTS: Joi.number().default(5),
-  DSP_RECONNECT_BASE_DELAY_MS: Joi.number().default(500),
+  // Defaults sized to survive a Render free-tier cold start (DSP service
+  // spun down after 15min idle can take 30-60s to wake and starts
+  // answering the WS upgrade with 502s until it's ready) -- not just a
+  // same-host "is the process up" retry budget. Base delay doubles each
+  // attempt up to the cap, so with these defaults (1s, 2s, 4s, 8s, 8s...)
+  // 10 attempts gives ~63s of total runway before giving up.
+  DSP_MAX_RECONNECT_ATTEMPTS: Joi.number().default(10),
+  DSP_RECONNECT_BASE_DELAY_MS: Joi.number().default(1000),
+  DSP_RECONNECT_MAX_DELAY_MS: Joi.number().default(8000),
 
   REDIS_URL: Joi.string().uri().allow('').default(''),
 
@@ -83,6 +90,7 @@ module.exports = Object.freeze({
     calibrationTimeoutMs: envVars.DSP_CALIBRATION_TIMEOUT_MS,
     maxReconnectAttempts: envVars.DSP_MAX_RECONNECT_ATTEMPTS,
     reconnectBaseDelayMs: envVars.DSP_RECONNECT_BASE_DELAY_MS,
+    reconnectMaxDelayMs: envVars.DSP_RECONNECT_MAX_DELAY_MS,
   },
 
   redisUrl: envVars.REDIS_URL || null,
