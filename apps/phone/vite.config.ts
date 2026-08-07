@@ -1,9 +1,9 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ command }) => {
   // HTTPS is required here (not optional): browsers only expose
   // navigator.mediaDevices.getUserMedia in a "secure context", and a LAN IP
   // like http://172.16.x.x is not one — only https:// or http://localhost
@@ -17,13 +17,25 @@ export default defineConfig({
   // .certs/openssl.cnf) that has a real `IP.2 = 172.15.4.184` SAN entry.
   // Regenerate .certs/{cert,key}.pem (and update the IP in openssl.cnf) if
   // the laptop's LAN IP changes.
-  plugins: [react()],
-  server: {
-    host: true,
-    port: 5174,
-    https: {
-      cert: readFileSync('.certs/cert.pem'),
-      key: readFileSync('.certs/key.pem'),
+  //
+  // Only wired up for `vite dev` (command === 'serve') -- `.certs/*.pem`
+  // is gitignored (never committed) and irrelevant for `vite build`: a
+  // production build has no dev server to attach HTTPS options to, and a
+  // host like Render serves the static output over its own HTTPS anyway.
+  // Reading these unconditionally broke every hosted build with an ENOENT
+  // for a file that was never supposed to exist outside a laptop checkout.
+  const certPath = '.certs/cert.pem'
+  const keyPath = '.certs/key.pem'
+  const hasLocalCerts = command === 'serve' && existsSync(certPath) && existsSync(keyPath)
+
+  return {
+    plugins: [react()],
+    server: {
+      host: true,
+      port: 5174,
+      ...(hasLocalCerts
+        ? { https: { cert: readFileSync(certPath), key: readFileSync(keyPath) } }
+        : {}),
     },
-  },
+  }
 })
