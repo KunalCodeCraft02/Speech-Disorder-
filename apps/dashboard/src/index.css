@@ -1,0 +1,100 @@
+@import 'tailwindcss';
+
+/*
+  Dark medical theme tokens. Chart-encoding colors (categorical slots,
+  status colors) come from the validated palette in the dataviz skill —
+  see references/palette.md — checked with scripts/validate_palette.js
+  against this app's navy surface (#0c1220). Chrome-only colors (plane,
+  surface, borders) are not data-encoded and were picked for contrast,
+  not run through the validator.
+*/
+@theme {
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+
+  /* chrome */
+  --color-plane: #070a12;
+  --color-surface: #0c1220;
+  --color-surface-raised: #111a2e;
+  --color-surface-hover: #16213a;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-strong: rgba(255, 255, 255, 0.14);
+
+  /* ink */
+  --color-ink: #f4f6fb;
+  --color-ink-secondary: #aab2c5;
+  --color-ink-muted: #6b7488;
+
+  /* chart chrome */
+  --color-grid: #1c2436;
+  --color-axis: #2a3348;
+
+  /* categorical slots used (fixed order, validated) */
+  --color-rate: #3987e5;
+  --color-pitch: #d95926;
+  --color-loudness: #199e70;
+  --color-pause: #d55181;
+  --color-va: #33b16a;
+  --color-composite: #9085e9;
+
+  /* status (fixed, never themed) */
+  --color-good: #0ca30c;
+  --color-warning: #fab219;
+  --color-serious: #ec835a;
+  --color-critical: #d03b3b;
+
+  --animate-pulse-ring: pulse-ring 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(57, 135, 229, 0.35);
+  }
+  100% {
+    box-shadow: 0 0 0 12px rgba(57, 135, 229, 0);
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-plane);
+  color: var(--color-ink);
+  color-scheme: dark;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+::selection {
+  background: rgba(57, 135, 229, 0.35);
+}
+
+/* thin, unobtrusive scrollbars for a data-dense dark UI */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ink-muted);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
