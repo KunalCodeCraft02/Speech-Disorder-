@@ -13,3 +13,17 @@ services:
       - type: rewrite
         source: /*
         destination: /index.html
+
+  # apps-dashboard.onrender.com — same BrowserRouter SPA situation as
+  # apps-phone above: "/" works but any client-side route (e.g. /patients)
+  # 404s on Render's static file server without this rewrite.
+  - type: web
+    name: apps-dashboard
+    runtime: static
+    rootDir: apps/dashboard
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
