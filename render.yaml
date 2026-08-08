@@ -1,0 +1,15 @@
+services:
+  # apps-phone.onrender.com — Vite/React SPA (react-router-dom BrowserRouter).
+  # Needs every path rewritten to index.html so client-side routing can take
+  # over; without this, Render's static file server 404s on any route besides
+  # "/" (e.g. /session, /calibrate).
+  - type: web
+    name: apps-phone
+    runtime: static
+    rootDir: apps/phone
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
