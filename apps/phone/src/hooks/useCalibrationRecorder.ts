@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { PCMAccumulator, TARGET_SAMPLE_RATE, downsampleFloat32, float32ToPCM16, int16ArrayToBase64 } from '../lib/pcm';
+import { PCMAccumulator, TARGET_SAMPLE_RATE, resampleFloat32 } from '../lib/pcm';
 
 export type CalibrationRecorderState = 'idle' | 'requesting-permission' | 'recording' | 'processing' | 'error';
 
 export interface CalibrationRecording {
-  audioBase64: string;
+  samples: Float32Array;
   sampleRate: number;
   durationSec: number;
 }
@@ -12,13 +12,14 @@ export interface CalibrationRecording {
 const CANCELLED = new Error('Calibration cancelled');
 
 /**
- * Captures a single fixed-duration mic recording (the 30s "read this
- * passage" calibration reading) via the same Web Audio API pipeline as
- * live sessions (public/worklets/pcm-capture-processor.js + src/lib/pcm.ts),
- * but accumulates it into one buffer instead of streaming chunks, and
- * resolves with a base64 PCM16 payload sized for a single REST POST.
+ * Captures a single fixed-duration mic recording (one ~20s calibration
+ * reading) via the same Web Audio API pipeline as live sessions
+ * (public/worklets/pcm-capture-processor.js + src/lib/pcm.ts), but
+ * accumulates it into one buffer instead of streaming chunks. Resolves
+ * with raw Float32 samples analyzed locally — no base64/REST payload,
+ * since calibration never leaves the device.
  */
-export function useCalibrationRecorder(durationSec = 30) {
+export function useCalibrationRecorder(durationSec = 20) {
   const [state, setState] = useState<CalibrationRecorderState>('idle');
   const [secondsRemaining, setSecondsRemaining] = useState(durationSec);
   const [error, setError] = useState<string | null>(null);
@@ -73,8 +74,8 @@ export function useCalibrationRecorder(durationSec = 30) {
 
       const accumulator = new PCMAccumulator();
       worklet.port.onmessage = (event: MessageEvent<Float32Array>) => {
-        const downsampled = downsampleFloat32(event.data, audioContext.sampleRate, TARGET_SAMPLE_RATE);
-        accumulator.push(float32ToPCM16(downsampled));
+        const resampled = resampleFloat32(event.data, audioContext.sampleRate, TARGET_SAMPLE_RATE);
+        accumulator.push(resampled);
       };
       source.connect(worklet);
 
@@ -100,7 +101,7 @@ export function useCalibrationRecorder(durationSec = 30) {
       teardownAudio();
 
       return {
-        audioBase64: int16ArrayToBase64(samples),
+        samples,
         sampleRate: TARGET_SAMPLE_RATE,
         durationSec: samples.length / TARGET_SAMPLE_RATE,
       };

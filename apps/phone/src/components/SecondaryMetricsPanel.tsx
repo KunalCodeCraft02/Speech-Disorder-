@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { MetricsUpdateEvent } from '../types';
+import type { MetricsFrame } from '../dsp/sessionPipeline';
 
 function Tile({ label, value }: { label: string; value: string }) {
   return (
@@ -13,11 +13,12 @@ function Tile({ label, value }: { label: string; value: string }) {
 const num = (v: number | null | undefined, digits = 2, unit = '') => (v == null ? '—' : `${v.toFixed(digits)}${unit}`);
 
 /**
- * Part F secondary/expandable panel. Disfluency rate / repetition rate /
- * false starts have no DSP computation defined anywhere in the spec
- * (Parts A-C) — shown as "not available" rather than fabricated.
+ * Detailed/expandable panel on the same live-session screen. Disfluency
+ * rate / repetition rate / false starts have no DSP computation defined
+ * anywhere in the classification engine spec — shown as "not available"
+ * rather than fabricated.
  */
-export function SecondaryMetricsPanel({ frame }: { frame: MetricsUpdateEvent | null }) {
+export function SecondaryMetricsPanel({ frame }: { frame: MetricsFrame | null }) {
   const [open, setOpen] = useState(false);
 
   return (

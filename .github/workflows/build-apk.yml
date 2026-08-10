@@ -1,0 +1,74 @@
+name: Build Android APK
+
+# Builds the Speech Biofeedback PWA and packages it as an installable
+# Android APK via Capacitor. The app itself is fully offline after first
+# load (see apps/phone's service worker) — this workflow is what turns the
+# web build into a native android/ wrapper; it needs network (npm, Gradle
+# dependency downloads), the shipped app does not.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/phone/**"
+      - ".github/workflows/build-apk.yml"
+  pull_request:
+    paths:
+      - "apps/phone/**"
+  workflow_dispatch: {}
+
+defaults:
+  run:
+    working-directory: apps/phone
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/phone/package-lock.json
+
+      - name: Install web dependencies
+        run: npm ci
+
+      - name: Build the PWA (offline app shell + service worker)
+        run: npm run build
+
+      - name: Sync web build into the Capacitor Android project
+        run: npx cap sync android
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      - name: Build debug APK
+        working-directory: apps/phone/android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: speech-biofeedback-debug-apk
+          path: apps/phone/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+# --- Release (signed) builds ---
+# `assembleDebug` above produces an unsigned-for-distribution debug APK,
+# installable directly on a device for testing (Settings > Install unknown
+# apps). To publish a signed release build instead:
+#   1. Generate a keystore: keytool -genkey -v -keystore release.keystore -alias speechbio -keyalg RSA -keysize 2048 -validity 10000
+#   2. Base64-encode it and store as a repo secret (e.g. ANDROID_KEYSTORE_BASE64),
+#      plus ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD.
+#   3. Add a step that decodes the secret to android/app/release.keystore,
+#      configure android/app/build.gradle's signingConfigs.release to read
+#      those same env vars, and run `./gradlew assembleRelease` instead.

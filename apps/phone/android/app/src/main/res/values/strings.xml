@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Speech Biofeedback</string>
+    <string name="title_activity_main">Speech Biofeedback</string>
+    <string name="package_name">com.speechbiofeedback.app</string>
+    <string name="custom_url_scheme">com.speechbiofeedback.app</string>
+</resources>

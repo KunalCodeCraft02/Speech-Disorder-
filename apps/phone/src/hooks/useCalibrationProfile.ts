@@ -1,34 +1,25 @@
-import { useEffect, useState } from 'react';
-import { dataClient } from '../lib/dataClient';
-import type { CalibrationProfile } from '../types';
+import { useCallback, useEffect, useState } from 'react';
+import { getCalibration, type CalibrationRecord } from '../storage/calibration';
 
 /**
- * Fetches the patient's calibration profile once per userId. `null` (once
- * loaded) means uncalibrated (Part A.1) -- distinct from `undefined`
- * (still loading), which callers use to gate the "uncalibrated" banner and
- * the pitch-alert's baseline pitch (Part E.13).
+ * Reads the on-device calibration baseline from IndexedDB. `null` (once
+ * loaded) means uncalibrated — distinct from `undefined` (still loading),
+ * which callers use to gate the "uncalibrated" banner and the pitch
+ * alert's baseline pitch.
  */
-export function useCalibrationProfile(userId: string | undefined) {
-  const [profile, setProfile] = useState<CalibrationProfile | null | undefined>(undefined);
+export function useCalibrationProfile() {
+  const [profile, setProfile] = useState<CalibrationRecord | null | undefined>(undefined);
+
+  const reload = useCallback(() => {
+    setProfile(undefined);
+    getCalibration()
+      .then((result) => setProfile(result))
+      .catch(() => setProfile(null));
+  }, []);
 
   useEffect(() => {
-    if (!userId) return;
-    let cancelled = false;
-    setProfile(undefined);
+    reload();
+  }, [reload]);
 
-    dataClient
-      .getCalibration(userId)
-      .then((result) => {
-        if (!cancelled) setProfile(result);
-      })
-      .catch(() => {
-        if (!cancelled) setProfile(null);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
-
-  return profile;
+  return { profile, reload };
 }

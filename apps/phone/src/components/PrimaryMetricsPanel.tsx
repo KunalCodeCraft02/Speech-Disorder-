@@ -1,4 +1,4 @@
-import type { MetricsUpdateEvent } from '../types';
+import type { MetricsFrame } from '../dsp/sessionPipeline';
 
 function Tile({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
@@ -14,8 +14,8 @@ function Tile({ label, value, unit }: { label: string; value: string; unit?: str
 
 const num = (v: number | null | undefined, digits = 2) => (v == null ? '—' : v.toFixed(digits));
 
-/** Part F primary tiles — identical parameter set to the dashboard, same numbers read in either disorderMode. */
-export function PrimaryMetricsPanel({ frame }: { frame: MetricsUpdateEvent | null }) {
+/** Primary live parameter set — the numbers that matter most for tachylalia monitoring, always visible on the single live-session screen. */
+export function PrimaryMetricsPanel({ frame }: { frame: MetricsFrame | null }) {
   return (
     <div className="grid grid-cols-3 gap-2">
       <Tile label="Speech Rate" value={num(frame?.speechRateWPM, 0)} unit="wpm" />

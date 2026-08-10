@@ -1,17 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { PCMChunker, TARGET_SAMPLE_RATE, downsampleFloat32, float32ToPCM16 } from '../lib/pcm';
+import { PCMChunker, TARGET_SAMPLE_RATE, resampleFloat32 } from '../lib/pcm';
 
 export type MicPermissionState = 'unknown' | 'requesting' | 'granted' | 'denied' | 'error';
 
 interface UseAudioCaptureOptions {
-  onChunk: (bytes: ArrayBuffer) => void;
+  onChunk: (samples: Float32Array) => void;
 }
 
 /**
- * Mic permission + Web Audio API capture, resampled to the DSP service's
- * 16kHz mono PCM16 contract and handed to `onChunk` in ~250ms frames.
- * Capture-only: the graph is never connected to `audioContext.destination`,
- * so there's no monitoring loopback/echo.
+ * Mic permission + Web Audio API capture, resampled to the local DSP
+ * pipeline's 16kHz mono Float32 contract and handed to `onChunk` in ~250ms
+ * frames. Capture-only: the graph is never connected to
+ * `audioContext.destination`, so there's no monitoring loopback/echo.
+ *
+ * Once Bluetooth earpods are connected as the OS's active input device,
+ * `getUserMedia` picks them up automatically — no earpod-specific code is
+ * needed here. `resampleFloat32` (../lib/pcm.ts) handles either direction,
+ * so it doesn't matter whether the earpods' mic reports a native rate
+ * above or below 16kHz.
  */
 export function useAudioCapture({ onChunk }: UseAudioCaptureOptions) {
   const [permissionState, setPermissionState] = useState<MicPermissionState>('unknown');
@@ -81,12 +87,12 @@ export function useAudioCapture({ onChunk }: UseAudioCaptureOptions) {
       const worklet = new AudioWorkletNode(audioContext, 'pcm-capture-processor');
       workletNodeRef.current = worklet;
 
-      const chunker = new PCMChunker((bytes) => onChunkRef.current(bytes));
+      const chunker = new PCMChunker((samples) => onChunkRef.current(samples));
       chunkerRef.current = chunker;
 
       worklet.port.onmessage = (event: MessageEvent<Float32Array>) => {
-        const downsampled = downsampleFloat32(event.data, audioContext.sampleRate, TARGET_SAMPLE_RATE);
-        chunker.push(float32ToPCM16(downsampled));
+        const resampled = resampleFloat32(event.data, audioContext.sampleRate, TARGET_SAMPLE_RATE);
+        chunker.push(resampled);
       };
 
       source.connect(worklet);

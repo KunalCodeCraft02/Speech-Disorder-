@@ -1,4 +1,4 @@
-import type { CalibrationProfile } from '../types';
+import type { CalibrationRecord } from '../storage/calibration';
 
 function Stat({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
@@ -14,7 +14,7 @@ function Stat({ label, value, unit }: { label: string; value: string; unit?: str
 
 const fmt = (v: number | null, digits = 1) => (v == null ? '—' : v.toFixed(digits));
 
-export function CalibrationSummary({ profile }: { profile: CalibrationProfile }) {
+export function CalibrationSummary({ profile }: { profile: CalibrationRecord }) {
   return (
     <div className="flex w-full flex-col gap-4">
       {profile.isPersonal ? (
@@ -47,16 +47,10 @@ export function CalibrationSummary({ profile }: { profile: CalibrationProfile })
             {fmt(profile.tachylaliaThreshold, 2)} syll/s
           </span>
         </div>
-        <div className="mt-1.5 flex items-center justify-between">
-          <span className="text-[var(--color-ink-muted)]">Bradylalia threshold</span>
-          <span className="tabular-nums font-medium text-[var(--color-warning)]">
-            {fmt(profile.bradylaliaThreshold, 2)} syll/s
-          </span>
-        </div>
       </div>
 
       <p className="text-center text-xs text-[var(--color-ink-muted)]">
-        Calibrated from a {profile.calibrationDurationSec ? Math.round(profile.calibrationDurationSec) : '—'}s reading
+        Calibrated from a {profile.durationSec ? Math.round(profile.durationSec) : '—'}s reading
         {profile.calibratedAt && ` · ${new Date(profile.calibratedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`}
       </p>
     </div>

@@ -1,0 +1,67 @@
+// Local equivalent of the DSP service's POST /calibrate — pools the 2
+// recorded clips' calibration-subwindow samples into one personal
+// baseline, entirely on-device. Mirrors
+// services/dsp-service/app/api/routes.py's `calibrate()` (Part A of the
+// classification engine spec), minus everything that only made sense over
+// a network boundary (bearer auth, JSON payload shaping).
+
+import { baselineFromSubwindowSamples } from '../dsp/baseline';
+import { settings } from '../dsp/config';
+import { analyzeCalibrationClip, type CalibrationClipResult } from '../dsp/sessionPipeline';
+import { saveCalibration, type CalibrationRecord } from '../storage/calibration';
+
+export class CalibrationError extends Error {}
+
+function weightedMean(clipResults: CalibrationClipResult[], key: keyof CalibrationClipResult['descriptive']): number | null {
+  const pairs = clipResults
+    .map((c) => [c.descriptive[key], c.durationSec] as const)
+    .filter(([v]) => v !== null && v !== undefined) as Array<readonly [number, number]>;
+  const totalWeight = pairs.reduce((sum, [, w]) => sum + w, 0);
+  if (pairs.length === 0 || totalWeight <= 0) return null;
+  return pairs.reduce((sum, [v, w]) => sum + v * w, 0) / totalWeight;
+}
+
+/**
+ * Runs each recorded clip through the calibration-clip analysis, pools
+ * every clip's sub-window samples (Part A.4: 2 short clips beat one longer
+ * one), rejects the attempt if pooled phonation time is too short (Part
+ * A.3), and persists the resulting baseline locally.
+ */
+export async function runCalibration(clips: Array<{ samples: Float32Array; sampleRate: number }>): Promise<CalibrationRecord> {
+  if (clips.length === 0) {
+    throw new CalibrationError('Calibration requires at least one recorded clip.');
+  }
+
+  const clipResults = clips.map((clip) => analyzeCalibrationClip(clip.samples, clip.sampleRate, settings));
+
+  const totalPhonation = clipResults.reduce((sum, c) => sum + c.phonationSec, 0);
+  if (totalPhonation < settings.minCalibrationPhonationSec) {
+    throw new CalibrationError(
+      `Only ${totalPhonation.toFixed(1)}s of actual speech detected across ${clipResults.length} clip(s); ` +
+        `${settings.minCalibrationPhonationSec.toFixed(0)}s of phonation is required. Please redo calibration and try to speak continuously through the passage.`
+    );
+  }
+
+  const rateSamples = clipResults.flatMap((c) => c.rateSamples);
+  const pauseSamples = clipResults.flatMap((c) => c.pauseSamples);
+  const syllSamples = clipResults.flatMap((c) => c.syllableDurationSamples);
+  const ipuSamples = clipResults.flatMap((c) => c.ipuLengthSamples);
+
+  const baseline = baselineFromSubwindowSamples(rateSamples, pauseSamples, syllSamples, ipuSamples, settings);
+
+  const record: CalibrationRecord = {
+    ...baseline,
+    baselineSpeechRateWPM: weightedMean(clipResults, 'speechRateWPM'),
+    baselinePitchHz: weightedMean(clipResults, 'meanPitchHz'),
+    baselineLoudnessDb: weightedMean(clipResults, 'loudnessDb'),
+    baselinePauseDurationSec: weightedMean(clipResults, 'pauseDurationSec'),
+    baselineSpeechRatio: weightedMean(clipResults, 'speechRatio'),
+    durationSec: Math.round(clipResults.reduce((sum, c) => sum + c.durationSec, 0) * 100) / 100,
+    syllableCount: clipResults.reduce((sum, c) => sum + c.syllableCount, 0),
+    clipCount: clipResults.length,
+    calibratedAt: new Date().toISOString(),
+  };
+
+  await saveCalibration(record);
+  return record;
+}

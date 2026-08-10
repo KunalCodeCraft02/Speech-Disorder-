@@ -1,10 +1,9 @@
-import type { Classification } from '../types';
+import type { Classification } from '../dsp/classifier';
 
 const CONFIG: Record<Classification, { label: string; color: string; glow: string }> = {
   uncalibrated: { label: 'Calibration Required', color: 'var(--color-ink-muted)', glow: 'rgba(148,148,148,0.22)' },
   normal: { label: 'Normal', color: 'var(--color-good)', glow: 'rgba(12,163,12,0.28)' },
   tachylalia: { label: 'Too Fast', color: 'var(--color-critical)', glow: 'rgba(208,59,59,0.32)' },
-  bradylalia: { label: 'Too Slow', color: 'var(--color-warning)', glow: 'rgba(250,178,25,0.30)' },
 };
 
 export function ClassificationBadge({

@@ -1,26 +1,23 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
-import { useAuth } from '../context/AuthContext';
 import { useCalibrationRecorder } from '../hooks/useCalibrationRecorder';
-import { dataClient } from '../lib/dataClient';
-import { extractApiErrorMessage } from '../lib/api';
+import { runCalibration, CalibrationError } from '../lib/calibrationEngine';
 import { CALIBRATION_CLIP_DURATION_SEC, CALIBRATION_PASSAGES } from '../lib/calibrationPassage';
 import { CalibrationSummary } from '../components/CalibrationSummary';
-import type { CalibrationClipUpload, CalibrationProfile } from '../types';
+import type { CalibrationRecord } from '../storage/calibration';
 
 type Phase = 'intro' | 'capturing' | 'submitting' | 'summary' | 'error';
 
 const CLIP_COUNT = CALIBRATION_PASSAGES.length;
 
-// The backend doesn't report granular calibration progress -- it's a single
-// synchronous POST that runs per-clip sub-window analysis and then pools the
-// final baseline server-side. This estimates progress client-side from
-// elapsed time against a rough expected duration, easing toward 92% so it
-// never falsely claims "done" before the response actually arrives, then
-// creeping slowly if processing runs long.
-const ESTIMATED_SUBMIT_MS = 3000;
-const ANALYZING_LABEL_CUTOFF_PCT = 65; // switch from "Analyzing…" to "Computing baseline…" past this point
+// Local analysis of ~40s of audio is fast (well under a second in
+// practice) but still takes a perceptible beat — this estimates progress
+// client-side from elapsed time so the bar doesn't just jump from 0 to
+// 100%, easing toward 92% so it never falsely claims "done" before
+// analysis actually finishes.
+const ESTIMATED_SUBMIT_MS = 1200;
+const ANALYZING_LABEL_CUTOFF_PCT = 65;
 
 function useSubmitProgress(active: boolean) {
   const [percent, setPercent] = useState(0);
@@ -53,37 +50,36 @@ function Spinner() {
 }
 
 /**
- * Part A.2/A.3/A.4: records CLIP_COUNT (2) independent ~20s clips back to
- * back and pools them into one calibration request — two short clips beat
- * one longer one for estimating the patient's own variance, and a clip
- * with too little actual speech gets rejected server-side (dsp-service's
- * MIN_CALIBRATION_PHONATION_SEC), surfaced here as an error the patient
- * can retry from scratch via "Try Again".
+ * Records CLIP_COUNT (2) independent ~20s clips back to back and pools
+ * them into one local calibration pass — two short clips beat one longer
+ * one for estimating the patient's own variance. A clip pool with too
+ * little actual speech is rejected (mirrors the DSP service's old
+ * MIN_CALIBRATION_PHONATION_SEC gate, now enforced locally), surfaced here
+ * as an error the patient can retry from scratch via "Try Again".
+ * Everything — recording, analysis, storage — happens on-device.
  */
 export function CalibrationPage() {
-  const { user } = useAuth();
   const navigate = useNavigate();
   const recorder = useCalibrationRecorder(CALIBRATION_CLIP_DURATION_SEC);
 
   const [phase, setPhase] = useState<Phase>('intro');
   const [clipIndex, setClipIndex] = useState(0);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [result, setResult] = useState<CalibrationProfile | null>(null);
+  const [result, setResult] = useState<CalibrationRecord | null>(null);
   const [submitDone, setSubmitDone] = useState(false);
   const estimatedProgress = useSubmitProgress(phase === 'submitting' && !submitDone);
   const submitProgress = submitDone ? 100 : estimatedProgress;
 
   async function handleStart() {
-    if (!user) return;
     setSubmitError(null);
     setPhase('capturing');
 
-    const clips: CalibrationClipUpload[] = [];
+    const clips: Array<{ samples: Float32Array; sampleRate: number }> = [];
     try {
       for (let i = 0; i < CLIP_COUNT; i++) {
         setClipIndex(i);
         const recording = await recorder.record();
-        clips.push({ audioBase64: recording.audioBase64, sampleRate: recording.sampleRate });
+        clips.push({ samples: recording.samples, sampleRate: recording.sampleRate });
       }
     } catch (err) {
       if (!recorder.isCancelled(err)) setPhase('error');
@@ -94,15 +90,15 @@ export function CalibrationPage() {
     setSubmitDone(false);
     setPhase('submitting');
     try {
-      const profile = await dataClient.recordCalibration(user.id, clips);
-      setResult(profile);
+      const record = await runCalibration(clips);
+      setResult(record);
       setSubmitDone(true);
       // Let the 100% state render for a beat instead of jumping straight
       // from mid-progress to the summary screen.
       await new Promise((resolve) => setTimeout(resolve, 250));
       setPhase('summary');
     } catch (err) {
-      setSubmitError(extractApiErrorMessage(err, 'Failed to process calibration'));
+      setSubmitError(err instanceof CalibrationError ? err.message : 'Failed to process calibration');
       setPhase('error');
     }
   }
@@ -115,7 +111,7 @@ export function CalibrationPage() {
       <header className="flex items-center justify-between">
         <button
           type="button"
-          onClick={() => navigate('/session')}
+          onClick={() => navigate('/')}
           disabled={phase === 'submitting'}
           className="rounded-md px-2 py-1 text-xs font-medium text-[var(--color-ink-muted)] active:bg-[var(--color-surface-hover)] disabled:opacity-30"
         >
@@ -131,7 +127,7 @@ export function CalibrationPage() {
           <CalibrationSummary profile={result} />
           <button
             type="button"
-            onClick={() => navigate('/session')}
+            onClick={() => navigate('/')}
             className="w-full rounded-2xl bg-[var(--color-accent)] py-4 text-lg font-bold text-white active:scale-[0.98]"
           >
             Done
