@@ -7,7 +7,7 @@ export function Toast({ message, onDismiss }: { message: string | null; onDismis
       <button
         type="button"
         onClick={onDismiss}
-        className="pointer-events-auto rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 text-sm font-medium text-[var(--color-ink)] shadow-xl shadow-black/30"
+        className="pointer-events-auto rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 text-sm font-medium text-[var(--color-ink)] shadow-xl shadow-black/10"
       >
         {message}
       </button>

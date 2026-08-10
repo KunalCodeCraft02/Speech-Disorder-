@@ -1,30 +1,30 @@
 @import 'tailwindcss';
 
 /*
-  Same validated dark-medical palette as apps/dashboard (see that app's
-  index.css for the dataviz-skill validation notes) — kept consistent so
-  the phone and dashboard read as one product. This screen only uses the
-  status colors (good/warning/serious/critical) plus chrome, no series
-  colors, since there are no charts here.
+  Light, minimalist palette: near-white surfaces, dark slate text, a single
+  blue accent, and status colors chosen to stay AA-readable as small text
+  directly on white (not just as fills), since several of them double as
+  label text (StatusPill, warning copy, thresholds).
 */
 @theme {
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
 
-  --color-plane: #070a12;
-  --color-surface: #0c1220;
-  --color-surface-raised: #111a2e;
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-border-strong: rgba(255, 255, 255, 0.14);
+  --color-plane: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-surface-raised: #eef0f4;
+  --color-surface-hover: #e2e5ec;
+  --color-border: rgba(15, 23, 42, 0.08);
+  --color-border-strong: rgba(15, 23, 42, 0.16);
 
-  --color-ink: #f4f6fb;
-  --color-ink-secondary: #aab2c5;
-  --color-ink-muted: #6b7488;
+  --color-ink: #14171f;
+  --color-ink-secondary: #565d6d;
+  --color-ink-muted: #8a8fa3;
 
-  --color-accent: #3987e5;
-  --color-good: #0ca30c;
-  --color-warning: #fab219;
-  --color-serious: #ec835a;
-  --color-critical: #d03b3b;
+  --color-accent: #2563eb;
+  --color-good: #15803d;
+  --color-warning: #b45309;
+  --color-serious: #c2410c;
+  --color-critical: #dc2626;
 }
 
 html,
@@ -38,7 +38,7 @@ body {
   margin: 0;
   background: var(--color-plane);
   color: var(--color-ink);
-  color-scheme: dark;
+  color-scheme: light;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   /* Wearable/handheld target — no accidental pinch-zoom or text selection on taps. */

@@ -38,9 +38,22 @@ public class MainActivity extends BridgeActivity {
       @Override
       public void onPermissionRequest(final PermissionRequest request) {
         runOnUiThread(() -> {
+          boolean osGrantedMic = ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO)
+              == PackageManager.PERMISSION_GRANTED;
           for (String resource : request.getResources()) {
             if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)) {
-              request.grant(new String[] { PermissionRequest.RESOURCE_AUDIO_CAPTURE });
+              // Granting here while the OS-level RECORD_AUDIO permission is
+              // still unresolved makes getUserMedia() hang forever instead
+              // of rejecting (Chromium WebView quirk) — the JS side never
+              // sees an error and the UI is stuck on "Requesting mic…"
+              // indefinitely. Deny cleanly instead so the page's catch
+              // block fires and shows a real "permission denied" message.
+              if (osGrantedMic) {
+                request.grant(new String[] { PermissionRequest.RESOURCE_AUDIO_CAPTURE });
+              } else {
+                request.deny();
+                ActivityCompat.requestPermissions(MainActivity.this, new String[] { Manifest.permission.RECORD_AUDIO }, RECORD_AUDIO_REQUEST_CODE);
+              }
               return;
             }
           }

@@ -50,18 +50,24 @@ export function LiveSessionPage() {
     <div className={clsx('flex h-screen flex-col bg-[var(--color-plane)] px-5 py-4 transition-colors', flashActive && 'bg-[var(--color-warning)]/30')}>
       <header className="flex items-center justify-between gap-2">
         <h1 className="text-sm font-semibold text-[var(--color-ink)]">Speech Biofeedback</h1>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
           {isRecording ? (
-            <span className="px-2 py-1 text-xs font-medium text-[var(--color-ink-muted)] opacity-40">Today</span>
+            <span className="rounded-full border border-[var(--color-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-ink-muted)] opacity-40">Today</span>
           ) : (
-            <Link to="/today" className="rounded-md px-2 py-1 text-xs font-medium text-[var(--color-ink-muted)] active:bg-[var(--color-surface-hover)]">
+            <Link
+              to="/today"
+              className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[var(--color-ink-secondary)] active:bg-[var(--color-surface-hover)]"
+            >
               Today
             </Link>
           )}
           {isRecording ? (
-            <span className="px-2 py-1 text-xs font-medium text-[var(--color-ink-muted)] opacity-40">Calibrate</span>
+            <span className="rounded-full border border-[var(--color-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-ink-muted)] opacity-40">Calibrate</span>
           ) : (
-            <Link to="/calibrate" className="rounded-md px-2 py-1 text-xs font-medium text-[var(--color-ink-muted)] active:bg-[var(--color-surface-hover)]">
+            <Link
+              to="/calibrate"
+              className="rounded-full border border-[var(--color-accent)]/30 bg-[var(--color-accent)]/10 px-3 py-1.5 text-xs font-semibold text-[var(--color-accent)] active:bg-[var(--color-accent)]/20"
+            >
               Calibrate
             </Link>
           )}
@@ -69,6 +75,18 @@ export function LiveSessionPage() {
       </header>
 
       <div className="flex flex-1 flex-col items-center gap-4 overflow-y-auto py-4">
+        {!isRecording && calibration === null && (
+          <Link
+            to="/calibrate"
+            className="flex w-full items-center justify-between gap-3 rounded-2xl border border-[var(--color-accent)]/25 bg-[var(--color-accent)]/8 px-4 py-3 active:bg-[var(--color-accent)]/15"
+          >
+            <span className="text-sm text-[var(--color-ink)]">
+              <span className="font-semibold">Set up your baseline</span> — calibrate your voice to enable detection
+            </span>
+            <span className="text-lg text-[var(--color-accent)]">→</span>
+          </Link>
+        )}
+
         <StatusPill label={recordingCfg.label} color={recordingCfg.color} pulse={recordingCfg.pulse} />
 
         <ClassificationBadge classification={session.classification} confidence={session.confidence} active={isRecording} />
