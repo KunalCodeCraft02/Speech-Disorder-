@@ -73,17 +73,29 @@ export function useLiveSession() {
     setErrorMessage(null);
     setRecordingState('requesting-permission');
 
-    const calibration = await getCalibration();
-    const baseline = baselineFromStored(calibration, settings);
-    setUncalibrated(baseline === null);
-    baselineRateRef.current = baseline?.baselineArticulationRate ?? null;
+    // capture.start() creates the AudioContext "as the very first thing"
+    // specifically to stay tied to this click's user-activation call stack
+    // (see useAudioCapture's comment) — so it must be kicked off here
+    // before any other `await`, not after one. Awaiting getCalibration()
+    // (IndexedDB) first would insert a microtask boundary ahead of it,
+    // breaking that gesture linkage and making AudioWorkletNode
+    // construction fail with "No execution context available".
+    const capturePromise = capture.start();
+    const calibrationPromise = getCalibration();
 
     try {
-      await capture.start();
-    } catch {
+      await capturePromise;
+    } catch (err) {
+      const denied = err instanceof DOMException && err.name === 'NotAllowedError';
+      setErrorMessage(denied ? 'Microphone permission denied' : err instanceof Error ? err.message : 'Failed to access microphone');
       setRecordingState('error');
       return;
     }
+
+    const calibration = await calibrationPromise;
+    const baseline = baselineFromStored(calibration, settings);
+    setUncalibrated(baseline === null);
+    baselineRateRef.current = baseline?.baselineArticulationRate ?? null;
 
     pipelineRef.current = new SessionPipeline(newSessionId(), baseline, settings);
     sessionStartedAtRef.current = new Date().toISOString();
