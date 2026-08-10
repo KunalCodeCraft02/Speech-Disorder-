@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PCMAccumulator, TARGET_SAMPLE_RATE, resampleFloat32 } from '../lib/pcm';
-import { describeMicError, openMicStream } from '../lib/micStream';
+import { describeMicErrorVerbose, openMicStream } from '../lib/micStream';
 
 export type CalibrationRecorderState = 'idle' | 'requesting-permission' | 'recording' | 'processing' | 'error';
 
@@ -107,7 +107,7 @@ export function useCalibrationRecorder(durationSec = 20) {
     } catch (err) {
       teardownAudio();
       if (err !== CANCELLED) {
-        setError(describeMicError(err));
+        setError(describeMicErrorVerbose(err));
         setState('error');
       }
       throw err;

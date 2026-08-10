@@ -9,6 +9,7 @@ import { ClassificationBadge } from '../components/ClassificationBadge';
 import { PrimaryMetricsPanel } from '../components/PrimaryMetricsPanel';
 import { SecondaryMetricsPanel } from '../components/SecondaryMetricsPanel';
 import { Toast } from '../components/Toast';
+import { MicErrorMessage } from '../components/MicErrorMessage';
 import type { RecordingState } from '../hooks/useLiveSession';
 
 const RECORDING_CONFIG: Record<RecordingState, { label: string; color: string; pulse?: boolean }> = {
@@ -97,7 +98,7 @@ export function LiveSessionPage() {
           </p>
         )}
 
-        {session.errorMessage && <p className="max-w-xs text-center text-sm text-[var(--color-critical)]">{session.errorMessage}</p>}
+        {session.errorMessage && <MicErrorMessage message={session.errorMessage} />}
         {session.micPermissionState === 'denied' && (
           <p className="max-w-xs text-center text-xs text-[var(--color-ink-muted)]">
             Microphone access was denied. Enable it in your browser's site settings, then try again.

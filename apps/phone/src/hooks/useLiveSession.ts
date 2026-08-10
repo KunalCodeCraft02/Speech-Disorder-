@@ -3,7 +3,7 @@ import { baselineFromStored } from '../dsp/baseline';
 import { settings } from '../dsp/config';
 import { SessionPipeline, type MetricsFrame } from '../dsp/sessionPipeline';
 import { playBeep } from '../lib/beep';
-import { describeMicError } from '../lib/micStream';
+import { describeMicErrorVerbose } from '../lib/micStream';
 import { getCalibration } from '../storage/calibration';
 import { dateKeyFor, saveSession, type SessionSummary } from '../storage/sessions';
 import { useAudioCapture } from './useAudioCapture';
@@ -87,7 +87,7 @@ export function useLiveSession() {
     try {
       await capturePromise;
     } catch (err) {
-      setErrorMessage(describeMicError(err));
+      setErrorMessage(describeMicErrorVerbose(err));
       setRecordingState('error');
       return;
     }

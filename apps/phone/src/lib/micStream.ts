@@ -69,6 +69,25 @@ export class MicUnavailableError extends Error {
   }
 }
 
+/**
+ * A compact, screenshot-friendly diagnostic line: the DOMException name,
+ * whether this WebView considers itself a secure context, and the
+ * WebView's actual embedded Chromium build (parsed out of the user
+ * agent). That last part matters specifically because this app runs
+ * inside the OS's embedded WebView component, not the user-facing
+ * Chrome browser app -- those are two separate native binaries that
+ * can be on different Chromium versions, and a version gap there is a
+ * real, documented source of getUserMedia bugs that don't reproduce in
+ * Chrome itself even on the same device with the same permissions.
+ */
+export function captureMicDiagnostics(err: unknown): string {
+  const name = err instanceof MicUnavailableError && err.cause instanceof DOMException ? err.cause.name : err instanceof DOMException ? err.name : 'Unknown';
+  const chromeVersion = navigator.userAgent.match(/Chrome\/([\d.]+)/)?.[1] ?? 'unknown';
+  const wv = navigator.userAgent.includes('; wv)') ? 'WebView' : 'Chrome';
+  const deviceNote = err instanceof MicUnavailableError ? ` · device:${err.deviceDetected ? 'yes' : 'no'}` : '';
+  return `${name} · secure:${window.isSecureContext} · ${location.protocol} · ${wv} ${chromeVersion}${deviceNote}`;
+}
+
 /** Turns a getUserMedia() rejection into a message the patient can act on. */
 export function describeMicError(err: unknown): string {
   if (err instanceof MicUnavailableError) {
@@ -81,6 +100,17 @@ export function describeMicError(err: unknown): string {
     if (err.name === 'NotFoundError') return 'No microphone found on this device';
   }
   return err instanceof Error ? err.message : 'Failed to access microphone';
+}
+
+/**
+ * describeMicError() plus a diagnostic line, joined by a newline.
+ * Every mic-error surface in the UI uses this instead of the plain
+ * message so a screenshot of any error is a complete bug report on its
+ * own -- no separate devtools/USB-debugging session needed to see
+ * error.name, secure-context state, or the WebView's Chromium build.
+ */
+export function describeMicErrorVerbose(err: unknown): string {
+  return `${describeMicError(err)}\n${captureMicDiagnostics(err)}`;
 }
 
 function delay(ms: number): Promise<void> {

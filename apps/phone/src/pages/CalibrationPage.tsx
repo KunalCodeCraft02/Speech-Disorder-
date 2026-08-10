@@ -5,6 +5,7 @@ import { useCalibrationRecorder } from '../hooks/useCalibrationRecorder';
 import { runCalibration, CalibrationError } from '../lib/calibrationEngine';
 import { CALIBRATION_CLIP_DURATION_SEC, CALIBRATION_PASSAGES } from '../lib/calibrationPassage';
 import { CalibrationSummary } from '../components/CalibrationSummary';
+import { MicErrorMessage } from '../components/MicErrorMessage';
 import type { CalibrationRecord } from '../storage/calibration';
 
 type Phase = 'intro' | 'capturing' | 'submitting' | 'summary' | 'error';
@@ -178,11 +179,7 @@ export function CalibrationPage() {
               </div>
             )}
 
-            {phase === 'error' && (
-              <p className="max-w-xs text-center text-sm text-[var(--color-critical)]">
-                {submitError ?? recorder.error ?? 'Something went wrong'}
-              </p>
-            )}
+            {phase === 'error' && <MicErrorMessage message={submitError ?? recorder.error ?? 'Something went wrong'} />}
 
             {(phase === 'intro' || phase === 'error') && (
               <button
