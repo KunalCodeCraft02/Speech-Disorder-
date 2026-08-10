@@ -3,6 +3,7 @@ import { baselineFromStored } from '../dsp/baseline';
 import { settings } from '../dsp/config';
 import { SessionPipeline, type MetricsFrame } from '../dsp/sessionPipeline';
 import { playBeep } from '../lib/beep';
+import { describeMicError } from '../lib/micStream';
 import { getCalibration } from '../storage/calibration';
 import { dateKeyFor, saveSession, type SessionSummary } from '../storage/sessions';
 import { useAudioCapture } from './useAudioCapture';
@@ -86,8 +87,7 @@ export function useLiveSession() {
     try {
       await capturePromise;
     } catch (err) {
-      const denied = err instanceof DOMException && err.name === 'NotAllowedError';
-      setErrorMessage(denied ? 'Microphone permission denied' : err instanceof Error ? err.message : 'Failed to access microphone');
+      setErrorMessage(describeMicError(err));
       setRecordingState('error');
       return;
     }

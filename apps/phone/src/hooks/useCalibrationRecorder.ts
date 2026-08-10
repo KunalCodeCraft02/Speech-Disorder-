@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PCMAccumulator, TARGET_SAMPLE_RATE, resampleFloat32 } from '../lib/pcm';
-import { openMicStream } from '../lib/micStream';
+import { describeMicError, openMicStream } from '../lib/micStream';
 
 export type CalibrationRecorderState = 'idle' | 'requesting-permission' | 'recording' | 'processing' | 'error';
 
@@ -107,8 +107,7 @@ export function useCalibrationRecorder(durationSec = 20) {
     } catch (err) {
       teardownAudio();
       if (err !== CANCELLED) {
-        const denied = err instanceof DOMException && err.name === 'NotAllowedError';
-        setError(denied ? 'Microphone permission denied' : err instanceof Error ? err.message : 'Recording failed');
+        setError(describeMicError(err));
         setState('error');
       }
       throw err;

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PCMChunker, TARGET_SAMPLE_RATE, resampleFloat32 } from '../lib/pcm';
-import { openMicStream } from '../lib/micStream';
+import { describeMicError, openMicStream } from '../lib/micStream';
 
 export type MicPermissionState = 'unknown' | 'requesting' | 'granted' | 'denied' | 'error';
 
@@ -97,7 +97,7 @@ export function useAudioCapture({ onChunk }: UseAudioCaptureOptions) {
       source.connect(worklet);
     } catch (err) {
       const denied = err instanceof DOMException && err.name === 'NotAllowedError';
-      setError(denied ? 'Microphone permission denied' : err instanceof Error ? err.message : 'Failed to access microphone');
+      setError(describeMicError(err));
       setPermissionState(denied ? 'denied' : 'error');
       stop();
       throw err;
