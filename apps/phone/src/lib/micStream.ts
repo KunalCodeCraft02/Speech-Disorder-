@@ -108,8 +108,14 @@ export function describeMicError(err: unknown): string {
  * message so a screenshot of any error is a complete bug report on its
  * own -- no separate devtools/USB-debugging session needed to see
  * error.name, secure-context state, or the WebView's Chromium build.
+ *
+ * Also logs the same diagnostics to console.error: Android's WebView
+ * forwards page console output to logcat (tag "chromium"/"cr_Console")
+ * on debug builds, so `adb logcat -s chromium:E` catches every mic
+ * failure live, with no code changes needed to go looking for one.
  */
 export function describeMicErrorVerbose(err: unknown): string {
+  console.error('[mic]', captureMicDiagnostics(err), err);
   return `${describeMicError(err)}\n${captureMicDiagnostics(err)}`;
 }
 
