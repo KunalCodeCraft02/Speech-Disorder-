@@ -45,6 +45,15 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-feature android:name="android.hardware.microphone" android:required="true" />
 
+    <!-- Chromium's Android audio backend (media/audio/android/audio_manager_android.cc)
+         calls AudioManager.setMode()/selects a communication device for
+         *every* getUserMedia audio capture, regardless of constraints,
+         confirmed via `adb logcat` showing "Unable to select communication
+         device!" on every attempt. That AudioManager call requires this
+         permission; without it declared, mic capture fails outright with
+         NotReadableError even though RECORD_AUDIO is granted. -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
     <!-- No server calls are made after first install (the app is fully
          offline-first), but Capacitor's WebView plumbing and the
          precached service worker still expect this present by default. -->
