@@ -48,7 +48,13 @@ export function LiveSessionPage() {
   const recordingCfg = RECORDING_CONFIG[session.recordingState];
 
   return (
-    <div className={clsx('flex h-screen flex-col bg-[var(--color-plane)] px-5 py-4 transition-colors', flashActive && 'bg-[var(--color-warning)]/30')}>
+    <div
+      className={clsx(
+        'mx-auto flex h-screen w-full max-w-md flex-col overflow-hidden bg-[var(--color-plane)] px-5 transition-colors',
+        flashActive && 'bg-[var(--color-warning)]/30'
+      )}
+      style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))', paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+    >
       <header className="flex items-center justify-between gap-2">
         <h1 className="text-sm font-semibold text-[var(--color-ink)]">Speech Biofeedback</h1>
         <div className="flex items-center gap-2">
@@ -75,52 +81,57 @@ export function LiveSessionPage() {
         </div>
       </header>
 
-      <div className="flex flex-1 flex-col items-center gap-4 overflow-y-auto py-4">
-        {!isRecording && calibration === null && (
-          <Link
-            to="/calibrate"
-            className="flex w-full items-center justify-between gap-3 rounded-2xl border border-[var(--color-accent)]/25 bg-[var(--color-accent)]/8 px-4 py-3 active:bg-[var(--color-accent)]/15"
-          >
-            <span className="text-sm text-[var(--color-ink)]">
-              <span className="font-semibold">Set up your baseline</span> — calibrate your voice to enable detection
-            </span>
-            <span className="text-lg text-[var(--color-accent)]">→</span>
-          </Link>
-        )}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="flex min-h-full flex-col items-center gap-4 py-4 pb-2">
+          {!isRecording && calibration === null && (
+            <Link
+              to="/calibrate"
+              className="flex w-full items-center justify-between gap-3 rounded-2xl border border-[var(--color-accent)]/25 bg-[var(--color-accent)]/8 px-4 py-3 active:bg-[var(--color-accent)]/15"
+            >
+              <span className="text-sm text-[var(--color-ink)]">
+                <span className="font-semibold">Set up your baseline</span> — calibrate your voice to enable detection
+              </span>
+              <span className="text-lg text-[var(--color-accent)]">→</span>
+            </Link>
+          )}
 
-        <StatusPill label={recordingCfg.label} color={recordingCfg.color} pulse={recordingCfg.pulse} />
+          <StatusPill label={recordingCfg.label} color={recordingCfg.color} pulse={recordingCfg.pulse} />
 
-        <ClassificationBadge classification={session.classification} confidence={session.confidence} active={isRecording} />
+          <ClassificationBadge classification={session.classification} confidence={session.confidence} active={isRecording} />
 
-        {isUncalibrated && (
-          <p className="max-w-xs text-center text-xs text-[var(--color-warning)]">
-            You haven't calibrated yet — tachylalia detection is disabled. Tap "Calibrate" above to set a baseline.
-          </p>
-        )}
+          {isUncalibrated && (
+            <p className="max-w-xs text-center text-xs text-[var(--color-warning)]">
+              You haven't calibrated yet — tachylalia detection is disabled. Tap "Calibrate" above to set a baseline.
+            </p>
+          )}
 
-        {session.errorMessage && <MicErrorMessage message={session.errorMessage} />}
-        {session.micPermissionState === 'denied' && (
-          <p className="max-w-xs text-center text-xs text-[var(--color-ink-muted)]">
-            Microphone access was denied. Enable it in your browser's site settings, then try again.
-          </p>
-        )}
+          {session.errorMessage && <MicErrorMessage message={session.errorMessage} />}
+          {session.micPermissionState === 'denied' && (
+            <p className="max-w-xs text-center text-xs text-[var(--color-ink-muted)]">
+              Microphone access was denied. Enable it in your browser's site settings, then try again.
+            </p>
+          )}
 
-        {isRecording && (
-          <div className="flex w-full flex-col gap-3">
-            <PrimaryMetricsPanel frame={session.latest} />
-            <SecondaryMetricsPanel frame={session.latest} />
-          </div>
-        )}
+          {isRecording && (
+            <div className="flex w-full flex-col gap-3">
+              <PrimaryMetricsPanel frame={session.latest} />
+              <SecondaryMetricsPanel frame={session.latest} />
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="flex flex-col gap-3 pb-2">
+      <div className="relative flex flex-col gap-3 pt-2">
+        <span aria-hidden="true" className="glass-blob left-[8%] h-24 w-24 bg-[var(--color-good)]/35" style={{ bottom: '4.5rem' }} />
+        <span aria-hidden="true" className="glass-blob right-[10%] h-28 w-28 bg-[var(--color-critical)]/30" style={{ bottom: '-0.5rem' }} />
+
         <button
           type="button"
           onClick={() => void session.startRecording()}
           disabled={!canStart}
           className={clsx(
-            'w-full rounded-2xl py-6 text-xl font-bold tracking-wide text-white transition-all active:scale-[0.98]',
-            canStart ? 'bg-[var(--color-good)] shadow-lg shadow-[var(--color-good)]/20' : 'bg-[var(--color-surface-raised)] text-[var(--color-ink-muted)]'
+            'w-full rounded-2xl py-6 text-xl font-bold tracking-wide transition-all active:scale-[0.98]',
+            canStart ? 'glass-btn glass-btn-start text-white' : 'glass-btn glass-btn-disabled'
           )}
         >
           Start
@@ -130,8 +141,8 @@ export function LiveSessionPage() {
           onClick={session.stopRecording}
           disabled={!canStop}
           className={clsx(
-            'w-full rounded-2xl py-6 text-xl font-bold tracking-wide text-white transition-all active:scale-[0.98]',
-            canStop ? 'bg-[var(--color-critical)] shadow-lg shadow-[var(--color-critical)]/20' : 'bg-[var(--color-surface-raised)] text-[var(--color-ink-muted)]'
+            'w-full rounded-2xl py-6 text-xl font-bold tracking-wide transition-all active:scale-[0.98]',
+            canStop ? 'glass-btn glass-btn-stop text-white' : 'glass-btn glass-btn-disabled'
           )}
         >
           Stop

@@ -45,8 +45,11 @@ export function TodayPage() {
   }, []);
 
   return (
-    <div className="flex h-screen flex-col bg-[var(--color-plane)] px-5 py-4">
-      <header className="flex items-center justify-between">
+    <div
+      className="mx-auto flex h-screen w-full max-w-md flex-col overflow-hidden bg-[var(--color-plane)] px-5"
+      style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+    >
+      <header className="flex shrink-0 items-center justify-between">
         <button
           type="button"
           onClick={() => navigate('/')}
@@ -61,7 +64,7 @@ export function TodayPage() {
       {loading || !summary ? (
         <div className="flex flex-1 items-center justify-center text-sm text-[var(--color-ink-muted)]">Loading…</div>
       ) : (
-        <div className="mt-4 flex-1 overflow-y-auto">
+        <div className="mt-4 min-h-0 flex-1 overflow-y-auto pb-4">
           <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
             <p className="text-sm leading-relaxed text-[var(--color-ink-secondary)]">{insight}</p>
           </div>

@@ -50,3 +50,64 @@ body {
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
+
+/*
+  Liquid-glass Start/Stop buttons: a translucent, blurred "material"
+  instead of a flat fill, with a soft inner sheen along the top edge
+  (the highlight a curved glass surface catches) and a colored glow
+  seeping through from behind. Needs something with color/contrast
+  behind it to actually refract -- see the decorative blobs in
+  LiveSessionPage -- a blur over a flat single-tone background is
+  visually inert.
+*/
+.glass-btn {
+  position: relative;
+  isolation: isolate;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  box-shadow:
+    0 8px 24px -6px var(--glass-glow, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65),
+    inset 0 -12px 20px -14px rgba(255, 255, 255, 0.4);
+}
+
+.glass-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0.05) 45%, rgba(255, 255, 255, 0.18) 100%);
+  pointer-events: none;
+}
+
+.glass-btn-start {
+  --glass-glow: rgba(21, 128, 61, 0.35);
+  background: linear-gradient(135deg, rgba(74, 222, 128, 0.55), rgba(21, 128, 61, 0.5));
+}
+
+.glass-btn-stop {
+  --glass-glow: rgba(220, 38, 38, 0.35);
+  background: linear-gradient(135deg, rgba(248, 113, 113, 0.55), rgba(185, 28, 28, 0.5));
+}
+
+.glass-btn-disabled {
+  --glass-glow: transparent;
+  background: rgba(255, 255, 255, 0.35);
+  border-color: rgba(255, 255, 255, 0.4);
+  color: var(--color-ink-muted);
+  text-shadow: none;
+}
+
+/* Soft blurred color fields that sit behind the glass buttons so the
+   backdrop-blur has something to pick up -- purely decorative, no
+   interaction, excluded from the accessibility tree. */
+.glass-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(40px);
+  pointer-events: none;
+  z-index: 0;
+}

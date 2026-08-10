@@ -108,8 +108,11 @@ export function CalibrationPage() {
   const passage = CALIBRATION_PASSAGES[clipIndex] ?? CALIBRATION_PASSAGES[0];
 
   return (
-    <div className="flex h-screen flex-col bg-[var(--color-plane)] px-5 py-4">
-      <header className="flex items-center justify-between">
+    <div
+      className="mx-auto flex h-screen w-full max-w-md flex-col overflow-hidden bg-[var(--color-plane)] px-5"
+      style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))', paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+    >
+      <header className="flex shrink-0 items-center justify-between">
         <button
           type="button"
           onClick={() => navigate('/')}
@@ -123,20 +126,22 @@ export function CalibrationPage() {
       </header>
 
       {phase === 'summary' && result ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-5 overflow-y-auto py-4">
-          <p className="text-sm font-medium text-[var(--color-good)]">Calibration complete</p>
-          <CalibrationSummary profile={result} />
-          <button
-            type="button"
-            onClick={() => navigate('/')}
-            className="w-full rounded-2xl bg-[var(--color-accent)] py-4 text-lg font-bold text-white active:scale-[0.98]"
-          >
-            Done
-          </button>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="flex min-h-full flex-col items-center justify-center gap-5 py-4">
+            <p className="text-sm font-medium text-[var(--color-good)]">Calibration complete</p>
+            <CalibrationSummary profile={result} />
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="w-full rounded-2xl bg-[var(--color-accent)] py-4 text-lg font-bold text-white active:scale-[0.98]"
+            >
+              Done
+            </button>
+          </div>
         </div>
       ) : (
         <>
-          <div className="mt-4 flex-1 overflow-y-auto rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+          <div className="mt-4 min-h-0 flex-1 overflow-y-auto rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
             <p className="mb-3 text-xs font-medium uppercase tracking-wide text-[var(--color-ink-muted)]">
               {phase === 'capturing' ? `Clip ${clipIndex + 1} of ${CLIP_COUNT}` : `${CLIP_COUNT} short readings, ~${CALIBRATION_CLIP_DURATION_SEC}s each`}
               {' — read aloud, at your normal pace'}
@@ -144,7 +149,7 @@ export function CalibrationPage() {
             <p className="whitespace-pre-line text-lg leading-relaxed text-[var(--color-ink)]">{passage}</p>
           </div>
 
-          <div className="flex flex-col items-center gap-3 py-4">
+          <div className="flex shrink-0 flex-col items-center gap-3 py-4">
             {phase === 'capturing' && (
               <div className="flex w-full flex-col items-center gap-2">
                 <div className="flex w-full gap-1">
