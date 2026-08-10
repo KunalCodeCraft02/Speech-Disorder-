@@ -40,7 +40,7 @@
     <!-- getUserMedia() in the WebView needs both this manifest permission
          AND the runtime grant requested in MainActivity.java, AND the
          WebChromeClient override that answers the WebView's own internal
-         permission prompt (onPermissionRequest) -- all three are required
+         permission prompt (onPermissionRequest) - all three are required
          for mic capture to work inside a Capacitor WebView. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-feature android:name="android.hardware.microphone" android:required="true" />
