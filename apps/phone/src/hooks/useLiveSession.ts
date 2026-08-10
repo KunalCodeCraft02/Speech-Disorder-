@@ -137,7 +137,14 @@ export function useLiveSession() {
     setRecordingState('idle');
   }, [capture, recordingState]);
 
-  useEffect(() => () => capture.stop(), [capture]);
+  // `capture` (useAudioCapture's return value) is a new object every
+  // render, but `capture.stop` itself is a stable useCallback. Depending
+  // on the whole object here made React treat every re-render as a
+  // dependency change and run this cleanup mid-session — closing the
+  // AudioContext capture.start() had just created, out from under its
+  // still-in-flight addModule()/AudioWorkletNode setup (surfaced as
+  // "AudioWorkletNode cannot be created: No execution context available").
+  useEffect(() => () => capture.stop(), [capture.stop]);
 
   return {
     recordingState,

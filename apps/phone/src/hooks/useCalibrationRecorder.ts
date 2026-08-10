@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PCMAccumulator, TARGET_SAMPLE_RATE, resampleFloat32 } from '../lib/pcm';
+import { openMicStream } from '../lib/micStream';
 
 export type CalibrationRecorderState = 'idle' | 'requesting-permission' | 'recording' | 'processing' | 'error';
 
@@ -60,9 +61,7 @@ export function useCalibrationRecorder(durationSec = 20) {
         await audioContext.resume();
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      });
+      const stream = await openMicStream();
       streamRef.current = stream;
 
       await audioContext.audioWorklet.addModule('/worklets/pcm-capture-processor.js');

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PCMChunker, TARGET_SAMPLE_RATE, resampleFloat32 } from '../lib/pcm';
+import { openMicStream } from '../lib/micStream';
 
 export type MicPermissionState = 'unknown' | 'requesting' | 'granted' | 'denied' | 'error';
 
@@ -73,9 +74,7 @@ export function useAudioCapture({ onChunk }: UseAudioCaptureOptions) {
         await audioContext.resume();
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      });
+      const stream = await openMicStream();
       streamRef.current = stream;
       setPermissionState('granted');
 
