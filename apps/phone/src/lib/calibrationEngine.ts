@@ -8,7 +8,7 @@
 import { baselineFromSubwindowSamples } from '../dsp/baseline';
 import { settings } from '../dsp/config';
 import { analyzeCalibrationClip, type CalibrationClipResult } from '../dsp/sessionPipeline';
-import { saveCalibration, type CalibrationRecord } from '../storage/calibration';
+import { getCalibration, saveCalibration, type CalibrationRecord } from '../storage/calibration';
 
 export class CalibrationError extends Error {}
 
@@ -47,19 +47,25 @@ export async function runCalibration(clips: Array<{ samples: Float32Array; sampl
   const syllSamples = clipResults.flatMap((c) => c.syllableDurationSamples);
   const ipuSamples = clipResults.flatMap((c) => c.ipuLengthSamples);
 
-  const baseline = baselineFromSubwindowSamples(rateSamples, pauseSamples, syllSamples, ipuSamples, settings);
+  const previous = await getCalibration();
+  const baseline = baselineFromSubwindowSamples(rateSamples, pauseSamples, syllSamples, ipuSamples, settings, {
+    interSyllableIntervalSamples: clipResults.flatMap((c) => c.interSyllableIntervalSamples),
+    pauseDurationSamples: clipResults.flatMap((c) => c.pauseDurationSamples),
+    pauseFrequencySamples: clipResults.flatMap((c) => c.pauseFrequencySamples),
+    meanPitchSamples: clipResults.flatMap((c) => c.meanPitchSamples),
+    loudnessSamples: clipResults.flatMap((c) => c.loudnessSamples),
+    voiceActivitySamples: clipResults.flatMap((c) => c.voiceActivitySamples),
+  });
 
   const record: CalibrationRecord = {
     ...baseline,
     baselineSpeechRateWPM: weightedMean(clipResults, 'speechRateWPM'),
-    baselinePitchHz: weightedMean(clipResults, 'meanPitchHz'),
-    baselineLoudnessDb: weightedMean(clipResults, 'loudnessDb'),
-    baselinePauseDurationSec: weightedMean(clipResults, 'pauseDurationSec'),
     baselineSpeechRatio: weightedMean(clipResults, 'speechRatio'),
     durationSec: Math.round(clipResults.reduce((sum, c) => sum + c.durationSec, 0) * 100) / 100,
     syllableCount: clipResults.reduce((sum, c) => sum + c.syllableCount, 0),
     clipCount: clipResults.length,
     calibratedAt: new Date().toISOString(),
+    version: (previous?.version ?? 0) + 1,
   };
 
   await saveCalibration(record);

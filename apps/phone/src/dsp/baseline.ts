@@ -19,6 +19,24 @@ export interface BaselineProfile {
   baselineIpuLengthSec: number;
   baselineIpuLengthStd: number;
 
+  baselineInterSyllableIntervalSec: number;
+  baselineInterSyllableIntervalStd: number;
+
+  baselinePauseDurationSec: number;
+  baselinePauseDurationStd: number;
+
+  baselinePauseFrequencyPerMin: number;
+  baselinePauseFrequencyStd: number;
+
+  baselineMeanPitchHz: number;
+  baselineMeanPitchStd: number;
+
+  baselineLoudnessDb: number;
+  baselineLoudnessStd: number;
+
+  baselineVoiceActivityPercent: number;
+  baselineVoiceActivityStd: number;
+
   tachylaliaThreshold: number; // syllables/sec, upper bound (fixed-multiplier fallback)
 
   /** True only when a genuine per-patient std (>=2 calibration sub-windows) is available — gates z-score vs. fixed-multiplier classification. */
@@ -34,8 +52,20 @@ export function defaultBaselineProfile(settings: Settings): BaselineProfile {
     baselinePauseRatioStd: settings.defaultBaselinePauseRatioStd,
     baselineSyllableDurationSec: settings.defaultBaselineSyllableDurationSec,
     baselineSyllableDurationStd: settings.defaultBaselineSyllableDurationStd,
-    baselineIpuLengthSec: 1.0,
-    baselineIpuLengthStd: settings.defaultBaselineSyllableDurationStd,
+    baselineIpuLengthSec: settings.defaultBaselineIpuLengthSec,
+    baselineIpuLengthStd: settings.defaultBaselineIpuLengthStd,
+    baselineInterSyllableIntervalSec: settings.defaultBaselineInterSyllableIntervalSec,
+    baselineInterSyllableIntervalStd: settings.defaultBaselineInterSyllableIntervalStd,
+    baselinePauseDurationSec: settings.defaultBaselinePauseDurationSec,
+    baselinePauseDurationStd: settings.defaultBaselinePauseDurationStd,
+    baselinePauseFrequencyPerMin: settings.defaultBaselinePauseFrequencyPerMin,
+    baselinePauseFrequencyStd: settings.defaultBaselinePauseFrequencyStd,
+    baselineMeanPitchHz: settings.defaultBaselineMeanPitchHz,
+    baselineMeanPitchStd: settings.defaultBaselineMeanPitchStd,
+    baselineLoudnessDb: settings.defaultBaselineLoudnessDb,
+    baselineLoudnessStd: settings.defaultBaselineLoudnessStd,
+    baselineVoiceActivityPercent: settings.defaultBaselineVoiceActivityPercent,
+    baselineVoiceActivityStd: settings.defaultBaselineVoiceActivityStd,
     tachylaliaThreshold: rate * settings.tachylaliaMultiplier,
     isPersonal: false,
   };
@@ -65,12 +95,26 @@ export function baselineFromSubwindowSamples(
   pauseSamples: number[],
   syllableDurationSamples: number[],
   ipuLengthSamples: number[],
-  settings: Settings
+  settings: Settings,
+  extra?: {
+    interSyllableIntervalSamples?: number[];
+    pauseDurationSamples?: number[];
+    pauseFrequencySamples?: number[];
+    meanPitchSamples?: number[];
+    loudnessSamples?: number[];
+    voiceActivitySamples?: number[];
+  }
 ): BaselineProfile {
   const rate = meanStd(rateSamples);
   const pause = meanStd(pauseSamples);
   const syll = meanStd(syllableDurationSamples);
   const ipu = meanStd(ipuLengthSamples);
+  const isi = meanStd(extra?.interSyllableIntervalSamples ?? []);
+  const pauseDur = meanStd(extra?.pauseDurationSamples ?? []);
+  const pauseFreq = meanStd(extra?.pauseFrequencySamples ?? []);
+  const pitch = meanStd(extra?.meanPitchSamples ?? []);
+  const loudness = meanStd(extra?.loudnessSamples ?? []);
+  const voiceActivity = meanStd(extra?.voiceActivitySamples ?? []);
 
   const rateMean = rate.mean ?? settings.defaultBaselineArticulationRate;
 
@@ -81,8 +125,20 @@ export function baselineFromSubwindowSamples(
     baselinePauseRatioStd: pause.std ?? settings.defaultBaselinePauseRatioStd,
     baselineSyllableDurationSec: syll.mean ?? settings.defaultBaselineSyllableDurationSec,
     baselineSyllableDurationStd: syll.std ?? settings.defaultBaselineSyllableDurationStd,
-    baselineIpuLengthSec: ipu.mean ?? 1.0,
-    baselineIpuLengthStd: ipu.std ?? settings.defaultBaselineSyllableDurationStd,
+    baselineIpuLengthSec: ipu.mean ?? settings.defaultBaselineIpuLengthSec,
+    baselineIpuLengthStd: ipu.std ?? settings.defaultBaselineIpuLengthStd,
+    baselineInterSyllableIntervalSec: isi.mean ?? settings.defaultBaselineInterSyllableIntervalSec,
+    baselineInterSyllableIntervalStd: isi.std ?? settings.defaultBaselineInterSyllableIntervalStd,
+    baselinePauseDurationSec: pauseDur.mean ?? settings.defaultBaselinePauseDurationSec,
+    baselinePauseDurationStd: pauseDur.std ?? settings.defaultBaselinePauseDurationStd,
+    baselinePauseFrequencyPerMin: pauseFreq.mean ?? settings.defaultBaselinePauseFrequencyPerMin,
+    baselinePauseFrequencyStd: pauseFreq.std ?? settings.defaultBaselinePauseFrequencyStd,
+    baselineMeanPitchHz: pitch.mean ?? settings.defaultBaselineMeanPitchHz,
+    baselineMeanPitchStd: pitch.std ?? settings.defaultBaselineMeanPitchStd,
+    baselineLoudnessDb: loudness.mean ?? settings.defaultBaselineLoudnessDb,
+    baselineLoudnessStd: loudness.std ?? settings.defaultBaselineLoudnessStd,
+    baselineVoiceActivityPercent: voiceActivity.mean ?? settings.defaultBaselineVoiceActivityPercent,
+    baselineVoiceActivityStd: voiceActivity.std ?? settings.defaultBaselineVoiceActivityStd,
     tachylaliaThreshold: rateMean * settings.tachylaliaMultiplier,
     isPersonal: rate.n >= 2,
   };
@@ -103,8 +159,20 @@ export function baselineFromStored(data: Partial<BaselineProfile> | null, settin
     baselinePauseRatioStd: data.baselinePauseRatioStd ?? settings.defaultBaselinePauseRatioStd,
     baselineSyllableDurationSec: data.baselineSyllableDurationSec ?? settings.defaultBaselineSyllableDurationSec,
     baselineSyllableDurationStd: data.baselineSyllableDurationStd ?? settings.defaultBaselineSyllableDurationStd,
-    baselineIpuLengthSec: data.baselineIpuLengthSec ?? 1.0,
-    baselineIpuLengthStd: data.baselineIpuLengthStd ?? settings.defaultBaselineSyllableDurationStd,
+    baselineIpuLengthSec: data.baselineIpuLengthSec ?? settings.defaultBaselineIpuLengthSec,
+    baselineIpuLengthStd: data.baselineIpuLengthStd ?? settings.defaultBaselineIpuLengthStd,
+    baselineInterSyllableIntervalSec: data.baselineInterSyllableIntervalSec ?? settings.defaultBaselineInterSyllableIntervalSec,
+    baselineInterSyllableIntervalStd: data.baselineInterSyllableIntervalStd ?? settings.defaultBaselineInterSyllableIntervalStd,
+    baselinePauseDurationSec: data.baselinePauseDurationSec ?? settings.defaultBaselinePauseDurationSec,
+    baselinePauseDurationStd: data.baselinePauseDurationStd ?? settings.defaultBaselinePauseDurationStd,
+    baselinePauseFrequencyPerMin: data.baselinePauseFrequencyPerMin ?? settings.defaultBaselinePauseFrequencyPerMin,
+    baselinePauseFrequencyStd: data.baselinePauseFrequencyStd ?? settings.defaultBaselinePauseFrequencyStd,
+    baselineMeanPitchHz: data.baselineMeanPitchHz ?? settings.defaultBaselineMeanPitchHz,
+    baselineMeanPitchStd: data.baselineMeanPitchStd ?? settings.defaultBaselineMeanPitchStd,
+    baselineLoudnessDb: data.baselineLoudnessDb ?? settings.defaultBaselineLoudnessDb,
+    baselineLoudnessStd: data.baselineLoudnessStd ?? settings.defaultBaselineLoudnessStd,
+    baselineVoiceActivityPercent: data.baselineVoiceActivityPercent ?? settings.defaultBaselineVoiceActivityPercent,
+    baselineVoiceActivityStd: data.baselineVoiceActivityStd ?? settings.defaultBaselineVoiceActivityStd,
     tachylaliaThreshold: rate * settings.tachylaliaMultiplier,
     isPersonal,
   };

@@ -43,6 +43,13 @@ export interface MetricsFrame {
   zPause: number;
   zSyll: number;
   compositeZ: number;
+  zInterSyllableInterval: number;
+  zPauseDuration: number;
+  zPauseFrequency: number;
+  zIpuLength: number;
+  zPitch: number;
+  zLoudness: number;
+  zVoiceActivity: number;
 
   articulationRateSPS: number;
   speechRateWPM: number;
@@ -286,6 +293,13 @@ export class SessionPipeline {
       articulationRate: features.articulationRateSPS,
       speechToPauseRatio: features.speechToPauseRatio,
       avgSyllableDurationSec: features.averageSyllableDurationSec,
+      interSyllableIntervalSec: features.interSyllableIntervalSec,
+      pauseDurationSec: features.pauseDurationSec,
+      pauseFrequencyPerMin: features.pauseFrequencyPerMin,
+      ipuLengthSec: features.interPausalUnitLengthSec,
+      meanPitchHz: features.meanPitchHz,
+      loudnessDb: features.loudnessDb,
+      voiceActivityPercent: features.voiceActivityPercent,
       syllablesInWindow,
       phonationSecInWindow: phonationInWindow,
       baseline: this.baseline,
@@ -307,6 +321,13 @@ export class SessionPipeline {
       zPause: round(result.zPause, 3),
       zSyll: round(result.zSyll, 3),
       compositeZ: round(result.compositeZ, 3),
+      zInterSyllableInterval: round(result.zInterSyllableInterval, 3),
+      zPauseDuration: round(result.zPauseDuration, 3),
+      zPauseFrequency: round(result.zPauseFrequency, 3),
+      zIpuLength: round(result.zIpuLength, 3),
+      zPitch: round(result.zPitch, 3),
+      zLoudness: round(result.zLoudness, 3),
+      zVoiceActivity: round(result.zVoiceActivity, 3),
       ...featureSetFields(features),
       ...trendFields,
     };
@@ -352,6 +373,12 @@ export interface CalibrationClipResult {
   pauseSamples: number[];
   syllableDurationSamples: number[];
   ipuLengthSamples: number[];
+  interSyllableIntervalSamples: number[];
+  pauseDurationSamples: number[];
+  pauseFrequencySamples: number[];
+  meanPitchSamples: number[];
+  loudnessSamples: number[];
+  voiceActivitySamples: number[];
   descriptive: {
     speechRateWPM: number;
     meanPitchHz: number | null;
@@ -414,17 +441,35 @@ export function analyzeCalibrationClip(pcmFloat: Float32Array, sampleRate: numbe
   const pauseSamples: number[] = [];
   const syllSamples: number[] = [];
   const ipuSamples: number[] = [];
+  const isiSamples: number[] = [];
+  const pauseDurationSamples: number[] = [];
+  const pauseFrequencySamples: number[] = [];
+  const meanPitchSamples: number[] = [];
+  const loudnessSamples: number[] = [];
+  const voiceActivitySamples: number[] = [];
 
   if (subLen > 0) {
     const nSub = Math.floor(pcmFloat.length / subLen);
     for (let i = 0; i < nSub; i++) {
       const chunk = pcmFloat.slice(i * subLen, (i + 1) * subLen);
       const { features: subFeatures } = analyzeClip(chunk, sampleRate, defaultBaseline);
+
+      // Pause frequency / loudness / voice-activity are well-defined even
+      // for a subwindow with no detected syllable (e.g. a silent 4s chunk),
+      // so these are sampled unconditionally, unlike the syllable-dependent
+      // group below.
+      pauseFrequencySamples.push(subFeatures.pauseFrequencyPerMin);
+      loudnessSamples.push(subFeatures.loudnessDb);
+      voiceActivitySamples.push(subFeatures.voiceActivityPercent);
+      if (subFeatures.pauseDurationSec !== null) pauseDurationSamples.push(subFeatures.pauseDurationSec);
+      if (subFeatures.meanPitchHz !== null) meanPitchSamples.push(subFeatures.meanPitchHz);
+
       if (subFeatures.averageSyllableDurationSec === null) continue;
       rateSamples.push(subFeatures.articulationRateSPS);
       syllSamples.push(subFeatures.averageSyllableDurationSec);
       if (subFeatures.speechToPauseRatio !== null) pauseSamples.push(subFeatures.speechToPauseRatio);
       if (subFeatures.interPausalUnitLengthSec !== null) ipuSamples.push(subFeatures.interPausalUnitLengthSec);
+      if (subFeatures.interSyllableIntervalSec !== null) isiSamples.push(subFeatures.interSyllableIntervalSec);
     }
   }
 
@@ -438,6 +483,12 @@ export function analyzeCalibrationClip(pcmFloat: Float32Array, sampleRate: numbe
     pauseSamples,
     syllableDurationSamples: syllSamples,
     ipuLengthSamples: ipuSamples,
+    interSyllableIntervalSamples: isiSamples,
+    pauseDurationSamples,
+    pauseFrequencySamples,
+    meanPitchSamples,
+    loudnessSamples,
+    voiceActivitySamples,
     descriptive: {
       speechRateWPM: round(wholeFeatures.speechRateWPM, 2),
       meanPitchHz: roundOrNull(wholeFeatures.meanPitchHz, 1),

@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import clsx from 'clsx';
 import { Link } from 'react-router-dom';
-import { useLiveSession } from '../hooks/useLiveSession';
+import { useSessionContext } from '../context/SessionContext';
 import { useCalibrationProfile } from '../hooks/useCalibrationProfile';
 import { usePitchAlert } from '../hooks/usePitchAlert';
 import { StatusPill } from '../components/StatusPill';
 import { ClassificationBadge } from '../components/ClassificationBadge';
-import { PrimaryMetricsPanel } from '../components/PrimaryMetricsPanel';
+import { ParamGrid } from '../components/ParamGrid';
 import { SecondaryMetricsPanel } from '../components/SecondaryMetricsPanel';
 import { Toast } from '../components/Toast';
 import { MicErrorMessage } from '../components/MicErrorMessage';
@@ -20,17 +20,35 @@ const RECORDING_CONFIG: Record<RecordingState, { label: string; color: string; p
   error: { label: 'Error', color: 'var(--color-critical)' },
 };
 
+function NavPill({ to, label, disabled, accent }: { to: string; label: string; disabled: boolean; accent?: boolean }) {
+  if (disabled) {
+    return <span className="rounded-full border border-[var(--color-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-ink-muted)] opacity-40">{label}</span>;
+  }
+  return (
+    <Link
+      to={to}
+      className={clsx(
+        'rounded-full border px-3 py-1.5 text-xs font-medium active:scale-[0.97]',
+        accent
+          ? 'border-[var(--color-accent)]/40 bg-[var(--color-accent)]/15 text-[var(--color-accent-2)]'
+          : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink-secondary)] active:bg-[var(--color-surface-hover)]'
+      )}
+    >
+      {label}
+    </Link>
+  );
+}
+
 /**
- * Single live-session screen: everything runs in this tab, on-device — no
- * gateway, no dashboard route. Classification ring + the full primary
- * parameter set + expandable detail panel are all shown together (merges
- * what used to be the separate phone minimal view and dashboard live
- * panel).
+ * Main screen: classification ring + confidence, the 10 param cards, and
+ * Start/Stop -- no charts here (those live in the Analytics tab, which
+ * reads the same shared session subscription via SessionContext so
+ * switching tabs mid-recording doesn't restart capture).
  */
 export function LiveSessionPage() {
-  const session = useLiveSession();
+  const session = useSessionContext();
   const { profile: calibration } = useCalibrationProfile();
-  const pitchAlert = usePitchAlert(session.latest, calibration?.baselinePitchHz);
+  const pitchAlert = usePitchAlert(session.latest, calibration?.baselineMeanPitchHz);
 
   const [flashActive, setFlashActive] = useState(false);
   useEffect(() => {
@@ -44,6 +62,7 @@ export function LiveSessionPage() {
   const canStart = session.recordingState === 'idle' || session.recordingState === 'error';
   const canStop = isRecording;
   const isUncalibrated = isRecording && session.classification === 'uncalibrated';
+  const calibrated = calibration != null;
 
   const recordingCfg = RECORDING_CONFIG[session.recordingState];
 
@@ -51,33 +70,16 @@ export function LiveSessionPage() {
     <div
       className={clsx(
         'mx-auto flex h-screen w-full max-w-md flex-col overflow-hidden bg-[var(--color-plane)] px-5 transition-colors',
-        flashActive && 'bg-[var(--color-warning)]/30'
+        flashActive && 'bg-[var(--color-warning)]/20'
       )}
       style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))', paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
     >
-      <header className="flex items-center justify-between gap-2">
+      <header className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-sm font-semibold text-[var(--color-ink)]">Speech Biofeedback</h1>
-        <div className="flex items-center gap-2">
-          {isRecording ? (
-            <span className="rounded-full border border-[var(--color-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-ink-muted)] opacity-40">Today</span>
-          ) : (
-            <Link
-              to="/today"
-              className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[var(--color-ink-secondary)] active:bg-[var(--color-surface-hover)]"
-            >
-              Today
-            </Link>
-          )}
-          {isRecording ? (
-            <span className="rounded-full border border-[var(--color-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-ink-muted)] opacity-40">Calibrate</span>
-          ) : (
-            <Link
-              to="/calibrate"
-              className="rounded-full border border-[var(--color-accent)]/30 bg-[var(--color-accent)]/10 px-3 py-1.5 text-xs font-semibold text-[var(--color-accent)] active:bg-[var(--color-accent)]/20"
-            >
-              Calibrate
-            </Link>
-          )}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <NavPill to="/analytics" label="Analytics" disabled={false} accent />
+          <NavPill to="/today" label="Today" disabled={isRecording} />
+          <NavPill to="/calibrate" label="Calibrate" disabled={isRecording} />
         </div>
       </header>
 
@@ -86,12 +88,12 @@ export function LiveSessionPage() {
           {!isRecording && calibration === null && (
             <Link
               to="/calibrate"
-              className="flex w-full items-center justify-between gap-3 rounded-2xl border border-[var(--color-accent)]/25 bg-[var(--color-accent)]/8 px-4 py-3 active:bg-[var(--color-accent)]/15"
+              className="flex w-full items-center justify-between gap-3 rounded-2xl border border-[var(--color-accent)]/30 bg-[var(--color-accent)]/10 px-4 py-3 active:bg-[var(--color-accent)]/20"
             >
               <span className="text-sm text-[var(--color-ink)]">
                 <span className="font-semibold">Set up your baseline</span> — calibrate your voice to enable detection
               </span>
-              <span className="text-lg text-[var(--color-accent)]">→</span>
+              <span className="text-lg text-[var(--color-accent-2)]">→</span>
             </Link>
           )}
 
@@ -114,7 +116,7 @@ export function LiveSessionPage() {
 
           {isRecording && (
             <div className="flex w-full flex-col gap-3">
-              <PrimaryMetricsPanel frame={session.latest} />
+              <ParamGrid frame={session.latest} calibrated={calibrated} />
               <SecondaryMetricsPanel frame={session.latest} />
             </div>
           )}
@@ -122,8 +124,8 @@ export function LiveSessionPage() {
       </div>
 
       <div className="relative flex flex-col gap-3 pt-2">
-        <span aria-hidden="true" className="glass-blob left-[8%] h-24 w-24 bg-[var(--color-good)]/35" style={{ bottom: '4.5rem' }} />
-        <span aria-hidden="true" className="glass-blob right-[10%] h-28 w-28 bg-[var(--color-critical)]/30" style={{ bottom: '-0.5rem' }} />
+        <span aria-hidden="true" className="glass-blob left-[8%] h-24 w-24 bg-[var(--color-good)]/30" style={{ bottom: '4.5rem' }} />
+        <span aria-hidden="true" className="glass-blob right-[10%] h-28 w-28 bg-[var(--color-critical)]/25" style={{ bottom: '-0.5rem' }} />
 
         <button
           type="button"

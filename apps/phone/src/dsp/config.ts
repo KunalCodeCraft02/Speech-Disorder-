@@ -30,6 +30,20 @@ export interface Settings {
   defaultBaselinePauseRatioStd: number;
   defaultBaselineSyllableDurationSec: number;
   defaultBaselineSyllableDurationStd: number;
+  defaultBaselineInterSyllableIntervalSec: number;
+  defaultBaselineInterSyllableIntervalStd: number;
+  defaultBaselinePauseDurationSec: number;
+  defaultBaselinePauseDurationStd: number;
+  defaultBaselinePauseFrequencyPerMin: number;
+  defaultBaselinePauseFrequencyStd: number;
+  defaultBaselineIpuLengthSec: number;
+  defaultBaselineIpuLengthStd: number;
+  defaultBaselineMeanPitchHz: number;
+  defaultBaselineMeanPitchStd: number;
+  defaultBaselineLoudnessDb: number;
+  defaultBaselineLoudnessStd: number;
+  defaultBaselineVoiceActivityPercent: number;
+  defaultBaselineVoiceActivityStd: number;
 
   tachylaliaMultiplier: number;
 
@@ -59,6 +73,20 @@ export const settings: Settings = {
   defaultBaselinePauseRatioStd: 0.6,
   defaultBaselineSyllableDurationSec: 0.2,
   defaultBaselineSyllableDurationStd: 0.05,
+  defaultBaselineInterSyllableIntervalSec: 0.22,
+  defaultBaselineInterSyllableIntervalStd: 0.05,
+  defaultBaselinePauseDurationSec: 0.6,
+  defaultBaselinePauseDurationStd: 0.2,
+  defaultBaselinePauseFrequencyPerMin: 12,
+  defaultBaselinePauseFrequencyStd: 4,
+  defaultBaselineIpuLengthSec: 1.0,
+  defaultBaselineIpuLengthStd: 0.3,
+  defaultBaselineMeanPitchHz: 150,
+  defaultBaselineMeanPitchStd: 20,
+  defaultBaselineLoudnessDb: -20,
+  defaultBaselineLoudnessStd: 4,
+  defaultBaselineVoiceActivityPercent: 60,
+  defaultBaselineVoiceActivityStd: 10,
 
   tachylaliaMultiplier: 1.55,
 

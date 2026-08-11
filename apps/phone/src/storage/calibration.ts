@@ -7,9 +7,6 @@ import { CALIBRATION_KEY, idbDelete, idbGet, idbPut, STORE_CALIBRATION } from '.
 
 export interface CalibrationRecord extends BaselineProfile {
   baselineSpeechRateWPM: number | null;
-  baselinePitchHz: number | null;
-  baselineLoudnessDb: number | null;
-  baselinePauseDurationSec: number | null;
   baselineSpeechRatio: number | null;
 
   durationSec: number | null;
@@ -17,6 +14,8 @@ export interface CalibrationRecord extends BaselineProfile {
   clipCount: number;
 
   calibratedAt: string;
+  /** Increments on every recalibration — lets the UI/logs tell which calibration pass a session's baseline came from. */
+  version: number;
 }
 
 export async function getCalibration(): Promise<CalibrationRecord | null> {

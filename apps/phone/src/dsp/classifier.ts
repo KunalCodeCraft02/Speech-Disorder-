@@ -20,14 +20,34 @@ export interface ClassificationResult {
   zPause: number;
   zSyll: number;
   compositeZ: number;
+  // Display-only z-scores (Part D): each feeds only its own param card's
+  // color tier, never compositeZ/hysteresis/triggerFeedback.
+  zInterSyllableInterval: number;
+  zPauseDuration: number;
+  zPauseFrequency: number;
+  zIpuLength: number;
+  zPitch: number;
+  zLoudness: number;
+  zVoiceActivity: number;
   sampleSufficient: boolean;
 }
 
-function zscore(value: number | null, mean: number, stdDev: number, floor: number): number {
+/** value/baseline can be null when the DSP couldn't estimate this window's parameter (e.g. no voiced frames for pitch) -- 0 is a display placeholder ("no reading"), never treated as "0 deviation". */
+function zscore(value: number | null, mean: number, stdDev: number, floor: number, sign = 1): number {
   if (value === null) return 0;
   const denom = Math.max(stdDev, floor);
-  return (value - mean) / denom;
+  return (sign * (value - mean)) / denom;
 }
+
+const ZERO_DISPLAY_ZS = {
+  zInterSyllableInterval: 0,
+  zPauseDuration: 0,
+  zPauseFrequency: 0,
+  zIpuLength: 0,
+  zPitch: 0,
+  zLoudness: 0,
+  zVoiceActivity: 0,
+};
 
 export class HysteresisClassifier {
   private readonly settings: Settings;
@@ -49,16 +69,40 @@ export class HysteresisClassifier {
     articulationRate: number;
     speechToPauseRatio: number | null;
     avgSyllableDurationSec: number | null;
+    interSyllableIntervalSec: number | null;
+    pauseDurationSec: number | null;
+    pauseFrequencyPerMin: number;
+    ipuLengthSec: number | null;
+    meanPitchHz: number | null;
+    loudnessDb: number;
+    voiceActivityPercent: number;
     syllablesInWindow: number;
     phonationSecInWindow: number;
     baseline: BaselineProfile | null;
     currentTime: number;
   }): ClassificationResult {
-    const { articulationRate, speechToPauseRatio, avgSyllableDurationSec, syllablesInWindow, phonationSecInWindow, baseline, currentTime } =
-      args;
+    const {
+      articulationRate,
+      speechToPauseRatio,
+      avgSyllableDurationSec,
+      interSyllableIntervalSec,
+      pauseDurationSec,
+      pauseFrequencyPerMin,
+      ipuLengthSec,
+      meanPitchHz,
+      loudnessDb,
+      voiceActivityPercent,
+      syllablesInWindow,
+      phonationSecInWindow,
+      baseline,
+      currentTime,
+    } = args;
 
     if (baseline === null) {
-      // No calibration at all for this (single, real) patient — never emit tachylalia.
+      // No calibration at all for this (single, real) patient — never emit
+      // tachylalia, and every param card must surface "recalibration
+      // needed" rather than a silent 0 (the UI keys this off
+      // classification === 'uncalibrated', not off the z value).
       return {
         classification: 'uncalibrated',
         raw: 'uncalibrated',
@@ -69,6 +113,7 @@ export class HysteresisClassifier {
         zPause: 0,
         zSyll: 0,
         compositeZ: 0,
+        ...ZERO_DISPLAY_ZS,
         sampleSufficient: false,
       };
     }
@@ -83,12 +128,46 @@ export class HysteresisClassifier {
 
     const compositeZ = C.COMPOSITE_Z_WEIGHT_RATE * zRate + C.COMPOSITE_Z_WEIGHT_PAUSE * zPause + C.COMPOSITE_Z_WEIGHT_SYLL * zSyll;
 
+    // Display-only z-scores (Part D/C): each drives only its own param
+    // card's color tier. None of these seven feed compositeZ, hysteresis,
+    // or triggerFeedback — only zRate/zPause/zSyll above do.
+    const displayZs = {
+      zInterSyllableInterval: zscore(
+        interSyllableIntervalSec,
+        baseline.baselineInterSyllableIntervalSec,
+        baseline.baselineInterSyllableIntervalStd,
+        C.INTER_SYLLABLE_INTERVAL_STD_FLOOR,
+        -1
+      ),
+      zPauseDuration: zscore(pauseDurationSec, baseline.baselinePauseDurationSec, baseline.baselinePauseDurationStd, C.PAUSE_DURATION_STD_FLOOR, -1),
+      zPauseFrequency: zscore(
+        pauseFrequencyPerMin,
+        baseline.baselinePauseFrequencyPerMin,
+        baseline.baselinePauseFrequencyStd,
+        C.PAUSE_FREQUENCY_STD_FLOOR,
+        -1
+      ),
+      zIpuLength: zscore(ipuLengthSec, baseline.baselineIpuLengthSec, baseline.baselineIpuLengthStd, C.IPU_LENGTH_STD_FLOOR, 1),
+      zPitch: zscore(meanPitchHz, baseline.baselineMeanPitchHz, baseline.baselineMeanPitchStd, C.MEAN_PITCH_STD_FLOOR, 1),
+      zLoudness: zscore(loudnessDb, baseline.baselineLoudnessDb, baseline.baselineLoudnessStd, C.LOUDNESS_STD_FLOOR, 1),
+      zVoiceActivity: zscore(
+        voiceActivityPercent,
+        baseline.baselineVoiceActivityPercent,
+        baseline.baselineVoiceActivityStd,
+        C.VOICE_ACTIVITY_STD_FLOOR,
+        1
+      ),
+    };
+
     const sampleSufficient = syllablesInWindow >= settings.minSyllablesPerWindow && phonationSecInWindow >= settings.minPhonationSecPerWindow;
 
     if (!sampleSufficient) {
       // A mostly-silent/too-short window must not inject a noisy rate
       // estimate into the decision — carry the previous confirmed state
-      // forward untouched, without resetting the hysteresis counters.
+      // forward untouched, without resetting the hysteresis counters. The
+      // seven display-only z's still reflect this window's actual reading
+      // (they never feed the decision, so there's nothing to protect them
+      // from).
       const reason = this.confirmed !== 'normal' && this.confirmed !== 'uncalibrated' ? this.confirmed : null;
       return {
         classification: this.confirmed,
@@ -100,6 +179,7 @@ export class HysteresisClassifier {
         zPause,
         zSyll,
         compositeZ,
+        ...displayZs,
         sampleSufficient: false,
       };
     }
@@ -169,6 +249,7 @@ export class HysteresisClassifier {
       zPause,
       zSyll,
       compositeZ,
+      ...displayZs,
       sampleSufficient: true,
     };
   }

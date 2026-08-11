@@ -1,30 +1,54 @@
 @import 'tailwindcss';
 
 /*
-  Light, minimalist palette: near-white surfaces, dark slate text, a single
-  blue accent, and status colors chosen to stay AA-readable as small text
-  directly on white (not just as fills), since several of them double as
-  label text (StatusPill, warning copy, thresholds).
+  Dark, high-contrast palette -- chart/status colors are the same validated
+  set previously used in apps/dashboard (checked with the dataviz skill's
+  validate_palette.js against a navy surface: lightness band, chroma floor,
+  CVD separation, and AA text contrast all pass), reused here unchanged so
+  the same encoding (rate/pitch/loudness/pause/voice-activity) means the
+  same thing in both this app's Analytics tab and its own history. Chrome
+  tokens (plane/surface/borders/ink) are new -- picked for a slightly more
+  saturated, "device at night" feel than the old dashboard's flatter navy.
 */
 @theme {
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
 
-  --color-plane: #f6f7f9;
-  --color-surface: #ffffff;
-  --color-surface-raised: #eef0f4;
-  --color-surface-hover: #e2e5ec;
-  --color-border: rgba(15, 23, 42, 0.08);
-  --color-border-strong: rgba(15, 23, 42, 0.16);
+  --color-plane: #06070d;
+  --color-surface: #10131e;
+  --color-surface-raised: #161a29;
+  --color-surface-hover: #1e2436;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-strong: rgba(255, 255, 255, 0.16);
 
-  --color-ink: #14171f;
-  --color-ink-secondary: #565d6d;
-  --color-ink-muted: #8a8fa3;
+  --color-ink: #f4f6fb;
+  --color-ink-secondary: #aab2c9;
+  --color-ink-muted: #6c7590;
 
-  --color-accent: #2563eb;
-  --color-good: #15803d;
-  --color-warning: #b45309;
-  --color-serious: #c2410c;
-  --color-critical: #dc2626;
+  --color-accent: #5b52e8;
+  --color-accent-2: #35c9dd;
+
+  /* chart chrome */
+  --color-grid: #1c2436;
+  --color-axis: #2a3348;
+
+  /* categorical slots -- fixed order, validated (see comment above) */
+  --color-rate: #5fa8f5;
+  --color-pitch: #f0854a;
+  --color-loudness: #2bc48a;
+  --color-pause: #ea77a6;
+  --color-va: #4fce8b;
+  --color-composite: #a99af0;
+
+  /* status -- fixed, never themed, also used for param-card tiers */
+  --color-good: #2bc46b;
+  --color-warning: #f4b73f;
+  --color-serious: #f0854a;
+  --color-critical: #f2564f;
+
+  /* param-card deviation tiers (Part D) -- |z|<1 / 1-2 / >=2 */
+  --color-tier-normal: var(--color-border-strong);
+  --color-tier-elevated: var(--color-warning);
+  --color-tier-abnormal: var(--color-critical);
 }
 
 html,
@@ -38,7 +62,7 @@ body {
   margin: 0;
   background: var(--color-plane);
   color: var(--color-ink);
-  color-scheme: light;
+  color-scheme: dark;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   /* Wearable/handheld target — no accidental pinch-zoom or text selection on taps. */
@@ -58,19 +82,20 @@ body {
   seeping through from behind. Needs something with color/contrast
   behind it to actually refract -- see the decorative blobs in
   LiveSessionPage -- a blur over a flat single-tone background is
-  visually inert.
+  visually inert. Reads even richer over the dark plane than it did on
+  white, since the glow has somewhere dark to bloom into.
 */
 .glass-btn {
   position: relative;
   isolation: isolate;
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
   box-shadow:
-    0 8px 24px -6px var(--glass-glow, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.65),
-    inset 0 -12px 20px -14px rgba(255, 255, 255, 0.4);
+    0 8px 28px -6px var(--glass-glow, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -12px 20px -14px rgba(255, 255, 255, 0.12);
 }
 
 .glass-btn::after {
@@ -79,24 +104,24 @@ body {
   inset: 0;
   z-index: -1;
   border-radius: inherit;
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0.05) 45%, rgba(255, 255, 255, 0.18) 100%);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.02) 45%, rgba(255, 255, 255, 0.08) 100%);
   pointer-events: none;
 }
 
 .glass-btn-start {
-  --glass-glow: rgba(21, 128, 61, 0.35);
-  background: linear-gradient(135deg, rgba(74, 222, 128, 0.55), rgba(21, 128, 61, 0.5));
+  --glass-glow: rgba(43, 196, 107, 0.45);
+  background: linear-gradient(135deg, rgba(79, 224, 155, 0.55), rgba(30, 150, 90, 0.55));
 }
 
 .glass-btn-stop {
-  --glass-glow: rgba(220, 38, 38, 0.35);
-  background: linear-gradient(135deg, rgba(248, 113, 113, 0.55), rgba(185, 28, 28, 0.5));
+  --glass-glow: rgba(242, 86, 79, 0.45);
+  background: linear-gradient(135deg, rgba(248, 130, 124, 0.55), rgba(196, 58, 52, 0.55));
 }
 
 .glass-btn-disabled {
   --glass-glow: transparent;
-  background: rgba(255, 255, 255, 0.35);
-  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
   color: var(--color-ink-muted);
   text-shadow: none;
 }

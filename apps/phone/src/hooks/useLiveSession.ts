@@ -3,15 +3,13 @@ import { baselineFromStored } from '../dsp/baseline';
 import { settings } from '../dsp/config';
 import { SessionPipeline, type MetricsFrame } from '../dsp/sessionPipeline';
 import { playBeep } from '../lib/beep';
+import { mainAlertHaptic } from '../lib/haptics';
 import { describeMicErrorVerbose } from '../lib/micStream';
 import { getCalibration } from '../storage/calibration';
 import { dateKeyFor, saveSession, type SessionSummary } from '../storage/sessions';
 import { useAudioCapture } from './useAudioCapture';
 
 export type RecordingState = 'idle' | 'requesting-permission' | 'recording' | 'stopping' | 'error';
-
-const VIBRATE_SUPPORTED = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
-const TACHYLALIA_VIBRATION_PATTERN = [80, 60, 80, 60, 80];
 
 function newSessionId(): string {
   return `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -55,12 +53,12 @@ export function useLiveSession() {
 
     if (frame.triggerFeedback) {
       feedbackCountRef.current += 1;
-      if (VIBRATE_SUPPORTED) {
-        navigator.vibrate(TACHYLALIA_VIBRATION_PATTERN);
-      } else {
-        playBeep();
-        setVisualFallbackPulse((n) => n + 1);
-      }
+      void mainAlertHaptic().then((fired) => {
+        if (!fired) {
+          playBeep();
+          setVisualFallbackPulse((n) => n + 1);
+        }
+      });
     }
 
     setLatest(frame);

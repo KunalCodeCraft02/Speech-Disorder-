@@ -81,5 +81,12 @@ export const WORDS_RING_BUFFER_SEC = 30.0;
 // --- z-score denominator floors ---
 export const PAUSE_RATIO_STD_FLOOR = 0.1;
 export const SYLLABLE_DURATION_STD_FLOOR = 0.02;
+export const INTER_SYLLABLE_INTERVAL_STD_FLOOR = 0.02;
+export const PAUSE_DURATION_STD_FLOOR = 0.1;
+export const PAUSE_FREQUENCY_STD_FLOOR = 1.0;
+export const IPU_LENGTH_STD_FLOOR = 0.3;
+export const MEAN_PITCH_STD_FLOOR = 5.0;
+export const LOUDNESS_STD_FLOOR = 2.0;
+export const VOICE_ACTIVITY_STD_FLOOR = 5.0;
 
 export const EPS = 1e-10;

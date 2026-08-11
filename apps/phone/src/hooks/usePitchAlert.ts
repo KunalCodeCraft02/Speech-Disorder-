@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MetricsFrame } from '../dsp/sessionPipeline';
+import { toneAlertHaptic } from '../lib/haptics';
 
-// Single short tick -- must never reuse the main tachylalia alert's
-// pattern ([80,60,80,60,80]), so the two are never confused for one another.
-const PITCH_ALERT_VIBRATION_PATTERN = [50];
-
-// Independent of FEEDBACK_REFRACTORY_SEC (the main alert's cooldown) --
-// this is its own cooldown so the two can never spam simultaneously.
-const PITCH_ALERT_COOLDOWN_MS = 8000;
+// Independent of FEEDBACK_REFRACTORY_SEC (the main alert's 4.0s cooldown) --
+// this is its own 6.0s cooldown so the two can never spam simultaneously,
+// and toneAlertHaptic() never shares a call site with mainAlertHaptic().
+const PITCH_ALERT_COOLDOWN_MS = 6000;
 const TOAST_VISIBLE_MS = 4000;
 
 /**
@@ -46,9 +44,7 @@ export function usePitchAlert(frame: MetricsFrame | null, baselinePitchHz: numbe
 
     lastFiredAtRef.current = now;
     setToastMessage('Try lowering your tone');
-    if (typeof navigator.vibrate === 'function') {
-      navigator.vibrate(PITCH_ALERT_VIBRATION_PATTERN);
-    }
+    void toneAlertHaptic();
 
     if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
     dismissTimerRef.current = setTimeout(() => setToastMessage(null), TOAST_VISIBLE_MS);

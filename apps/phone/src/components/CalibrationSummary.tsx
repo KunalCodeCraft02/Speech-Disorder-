@@ -30,7 +30,7 @@ export function CalibrationSummary({ profile }: { profile: CalibrationRecord }) 
       <div className="grid grid-cols-2 gap-3">
         <Stat label="Speech Rate" value={fmt(profile.baselineSpeechRateWPM, 0)} unit="wpm" />
         <Stat label="Articulation Rate" value={fmt(profile.baselineArticulationRate, 2)} unit="syll/s" />
-        <Stat label="Pitch" value={fmt(profile.baselinePitchHz, 0)} unit="Hz" />
+        <Stat label="Pitch" value={fmt(profile.baselineMeanPitchHz, 0)} unit="Hz" />
         <Stat label="Loudness" value={fmt(profile.baselineLoudnessDb, 1)} unit="dB" />
         <Stat label="Pause Duration" value={fmt(profile.baselinePauseDurationSec, 2)} unit="sec" />
         <Stat
