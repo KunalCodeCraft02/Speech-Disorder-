@@ -134,6 +134,20 @@ export class RunningStats {
     return total;
   }
 
+  windowedPauseSec(windowStart: number, windowEnd: number, openKind: SegmentKind, openStart: number, openEnd: number): number {
+    let total = 0;
+    for (const seg of this.recentSegments) {
+      if (seg.kind !== 'pause') continue;
+      const overlap = Math.min(seg.end, windowEnd) - Math.max(seg.start, windowStart);
+      if (overlap > 0) total += overlap;
+    }
+    if (openKind === 'pause') {
+      const overlap = Math.min(openEnd, windowEnd) - Math.max(openStart, windowStart);
+      if (overlap > 0) total += overlap;
+    }
+    return total;
+  }
+
   /** Relative dBFS-style frame energy (0 dBFS = digital full scale, so all real readings are negative) from the VAD's own energy estimate -- not a calibrated microphone-relative SPL measurement (Part 13). Averaged over recentFrameDecisions (already windowed), so a single loud/quiet frame doesn't move the displayed value on its own. */
   windowedLoudnessDb(): number {
     const speechEnergies = this.recentFrameDecisions.filter((d) => d.isSpeech).map((d) => d.energyDb);
@@ -177,9 +191,22 @@ export class RunningStats {
     return elapsedSec > C.EPS ? (100 * speechSec) / elapsedSec : 0;
   }
 
-  speechToPauseRatio(openKind: SegmentKind, openDuration: number): number | null {
-    const speechSec = this.totalIpuSec + (openKind === 'speech' ? openDuration : 0);
-    const pauseSec = this.totalPauseSec + (openKind === 'pause' ? openDuration : 0);
+  /**
+   * Windowed (trailing analysisWindowSec), not session-cumulative -- this
+   * feeds zPause/compositeZ (see classifier.ts), and the personal baseline
+   * it's compared against (baselinePauseRatio/-Std) is the mean/std of
+   * per-4s-subwindow ratios from calibration (baseline.ts/sessionPipeline's
+   * analyzeCalibrationClip). A cumulative-since-session-start ratio drifts
+   * further from that per-window baseline the longer a session runs
+   * (e.g. speech_seconds_total keeps growing while pause_seconds_total
+   * stays flat during a long run of continuous talking) regardless of
+   * current speaking behavior, which both false-triggers tachylalia later
+   * in a session and -- being monotonic -- can never recover back to
+   * NORMAL once it has.
+   */
+  speechToPauseRatio(windowStart: number, windowEnd: number, openKind: SegmentKind, openStart: number, openEnd: number): number | null {
+    const speechSec = this.windowedPhonationSec(windowStart, windowEnd, openKind, openStart, openEnd);
+    const pauseSec = this.windowedPauseSec(windowStart, windowEnd, openKind, openStart, openEnd);
     return pauseSec > C.EPS ? speechSec / pauseSec : null;
   }
 }
@@ -280,7 +307,7 @@ export function computeFeatureSet(
     pauseDurationSec,
     pauseFrequencyPerMin: stats.pauseFrequencyPerMin(elapsedSec),
     pauseCount: stats.totalPauseCount,
-    speechToPauseRatio: stats.speechToPauseRatio(openKind, openDuration),
+    speechToPauseRatio: stats.speechToPauseRatio(windowStart, windowEnd, openKind, openStart, openEnd),
     interPausalUnitLengthSec,
     ipuCount: stats.totalIpuCount + (openSpeechDuration > C.EPS ? 1 : 0),
     speakingDurationSec: stats.totalIpuSec + openSpeechDuration,
