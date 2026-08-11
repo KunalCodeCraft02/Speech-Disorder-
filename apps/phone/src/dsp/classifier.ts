@@ -52,13 +52,11 @@ const ZERO_DISPLAY_ZS = {
 export class HysteresisClassifier {
   private readonly settings: Settings;
   private readonly requiredWindows: number;
-  private readonly refractorySec: number;
   private readonly sustainSec: number;
   private readonly smoothingAlpha: number;
 
   private confirmed: Classification = 'normal';
   private rawCounters: Record<Classification, number> = { uncalibrated: 0, normal: 0, tachylalia: 0 };
-  private lastFeedbackTime: number | null = null;
   private lastConfidence = 0;
 
   /** EMA of compositeZ (Part 17/1): a single fast/loud burst inside an otherwise normal window shouldn't be able to cross zTachylalia on its own -- only a sustained elevation should. */
@@ -66,10 +64,9 @@ export class HysteresisClassifier {
   private rawStreakLabel: Classification | null = null;
   private rawStreakStartTime: number | null = null;
 
-  constructor(settings: Settings, requiredWindows?: number, refractorySec?: number) {
+  constructor(settings: Settings, requiredWindows?: number) {
     this.settings = settings;
     this.requiredWindows = Math.max(1, requiredWindows ?? settings.hysteresisWindows);
-    this.refractorySec = refractorySec ?? settings.feedbackRefractorySec;
     this.sustainSec = Math.max(0, settings.hysteresisSustainSec);
     this.smoothingAlpha = Math.min(1, Math.max(0, settings.compositeZSmoothingAlpha));
   }
@@ -256,18 +253,19 @@ export class HysteresisClassifier {
     this.lastConfidence = confidence;
 
     // --- Step 4: feedback (vibration) trigger ---
-    let trigger = false;
-    let reason: Classification | null = null;
-    if (this.confirmed !== 'normal') {
-      reason = this.confirmed;
-      if (edge) {
-        trigger = true;
-      } else if (this.lastFeedbackTime === null || currentTime - this.lastFeedbackTime >= this.refractorySec) {
-        trigger = true;
-      }
-    }
-
-    if (trigger) this.lastFeedbackTime = currentTime;
+    // Strictly edge-triggered: fires exactly once on the NORMAL->TACHYLALIA
+    // transition (`edge` is only true the instant `this.confirmed` changes
+    // -- see Step 2), never while the state merely persists, and never
+    // again until a return to 'normal' followed by a fresh transition back
+    // to 'tachylalia'. A periodic "also re-fire every few seconds while
+    // still abnormal" branch used to live here; combined with how sticky
+    // the smoothed/hysteresis-confirmed state can be, it produced
+    // vibration that felt continuous and disconnected from the patient's
+    // actual current speech -- removed rather than just tuned, since the
+    // bug was the repeat-while-steady-state behavior itself, not its
+    // timing.
+    const trigger = edge && this.confirmed !== 'normal';
+    const reason = trigger ? this.confirmed : null;
 
     return {
       classification: this.confirmed,

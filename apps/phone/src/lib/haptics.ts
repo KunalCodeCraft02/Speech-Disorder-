@@ -24,10 +24,12 @@ let inFlight = false;
 
 /**
  * Tachylalia alert: one continuous ~2.2s vibration. The classifier's
- * edge+refractory logic (feedbackRefractorySec, 4.0s) already prevents
- * back-to-back triggers while the condition stays continuously abnormal --
- * `inFlight` is a defensive second guard so even a caller bug can't stack
- * two overlapping vibrate() calls into one another.
+ * triggerFeedback is strictly edge-triggered (fires once on the
+ * NORMAL->TACHYLALIA transition, not again until a return to normal and a
+ * fresh transition -- see classifier.ts Step 4) so this can't be re-fired
+ * while the condition stays continuously abnormal; `inFlight` is a
+ * defensive second guard so even a caller bug can't stack two overlapping
+ * vibrate() calls into one another.
  *
  * Returns false if neither native Haptics nor navigator.vibrate fired, so
  * the caller can fall back to the beep+visual pulse.

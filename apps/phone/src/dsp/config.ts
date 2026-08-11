@@ -15,7 +15,6 @@ export interface Settings {
   hysteresisSustainSec: number;
   /** EMA smoothing factor (0-1, higher = more responsive/less smoothed) applied to compositeZ before it's compared against zTachylalia, so a single loud/fast burst inside an otherwise normal window can't cross the threshold on its own. */
   compositeZSmoothingAlpha: number;
-  feedbackRefractorySec: number;
 
   minSyllablesPerWindow: number;
   minPhonationSecPerWindow: number;
@@ -78,7 +77,6 @@ export const settings: Settings = {
   hysteresisWindows: 3,
   hysteresisSustainSec: 3.0,
   compositeZSmoothingAlpha: 0.35,
-  feedbackRefractorySec: 4.0,
 
   // Loosened from the original 4 syll / 1.5s: normal conversational speech
   // pauses within a 4s trailing window often left less than 1.5s of actual
@@ -103,8 +101,8 @@ export const settings: Settings = {
   toneAlertZThreshold: 1.5,
   toneAlertSustainSec: 3.0,
   toneAlertSmoothingAlpha: 0.35,
-  // Independent of feedbackRefractorySec (the main alert's cooldown) so the
-  // two can never spam simultaneously or be mistaken for one another.
+  // Independent of the main tachylalia alert's (edge-triggered) vibration
+  // so the two can never spam simultaneously or be mistaken for one another.
   toneAlertCooldownSec: 6.0,
   toneAlertToastVisibleSec: 4.0,
 
