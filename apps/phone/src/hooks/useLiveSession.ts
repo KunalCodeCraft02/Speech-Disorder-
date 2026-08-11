@@ -7,6 +7,7 @@ import { mainAlertHaptic } from '../lib/haptics';
 import { describeMicErrorVerbose } from '../lib/micStream';
 import { getCalibration } from '../storage/calibration';
 import { dateKeyFor, saveSession, type SessionSummary } from '../storage/sessions';
+import { useCurrentUser } from '../context/CurrentUserContext';
 import { useAudioCapture } from './useAudioCapture';
 
 export type RecordingState = 'idle' | 'requesting-permission' | 'recording' | 'stopping' | 'error';
@@ -23,6 +24,7 @@ function newSessionId(): string {
  * connection once the app (and its calibration) has loaded once.
  */
 export function useLiveSession() {
+  const { userId } = useCurrentUser();
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const [latest, setLatest] = useState<MetricsFrame | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -80,7 +82,7 @@ export function useLiveSession() {
     // breaking that gesture linkage and making AudioWorkletNode
     // construction fail with "No execution context available".
     const capturePromise = capture.start();
-    const calibrationPromise = getCalibration();
+    const calibrationPromise = getCalibration(userId);
 
     try {
       await capturePromise;
@@ -103,7 +105,7 @@ export function useLiveSession() {
     rateAccumRef.current = { sum: 0, count: 0 };
     setLatest(null);
     setRecordingState('recording');
-  }, [capture, recordingState]);
+  }, [capture, recordingState, userId]);
 
   const stopRecording = useCallback(() => {
     if (recordingState !== 'recording') return;

@@ -1,13 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCalibrationRecorder } from '../hooks/useCalibrationRecorder';
+import { useCalibrationProfile } from '../hooks/useCalibrationProfile';
+import { useCurrentUser } from '../context/CurrentUserContext';
 import { runCalibration, CalibrationError } from '../lib/calibrationEngine';
 import { CALIBRATION_CLIP_DURATION_SEC, CALIBRATION_PASSAGES } from '../lib/calibrationPassage';
 import { CalibrationSummary } from '../components/CalibrationSummary';
 import { MicErrorMessage } from '../components/MicErrorMessage';
 import type { CalibrationRecord } from '../storage/calibration';
 
-type Phase = 'intro' | 'capturing' | 'submitting' | 'summary' | 'error';
+type Phase = 'loading' | 'view' | 'intro' | 'capturing' | 'submitting' | 'summary' | 'error';
 
 const CLIP_COUNT = CALIBRATION_PASSAGES.length;
 
@@ -56,19 +58,42 @@ function Spinner() {
  * little actual speech is rejected (mirrors the DSP service's old
  * MIN_CALIBRATION_PHONATION_SEC gate, now enforced locally), surfaced here
  * as an error the patient can retry from scratch via "Try Again".
- * Everything — recording, analysis, storage — happens on-device.
+ * Everything — recording, analysis, storage — happens on-device, scoped to
+ * the signed-in user (see storage/calibration.ts).
+ *
+ * If this user already has a saved calibration, opening this screen shows
+ * it (phase 'view') instead of immediately starting a new recording --
+ * only tapping "Update Calibration" enters the same capture/submit flow a
+ * first-time user gets from 'intro'. Nothing is written to storage until
+ * that flow succeeds, so cancelling or a failed attempt during an update
+ * leaves the existing calibration exactly as it was.
  */
 export function CalibrationPage() {
   const navigate = useNavigate();
+  const { userId } = useCurrentUser();
+  const { profile: existingProfile } = useCalibrationProfile();
   const recorder = useCalibrationRecorder(CALIBRATION_CLIP_DURATION_SEC);
 
-  const [phase, setPhase] = useState<Phase>('intro');
+  const [phase, setPhase] = useState<Phase>('loading');
   const [clipIndex, setClipIndex] = useState(0);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [result, setResult] = useState<CalibrationRecord | null>(null);
   const [submitDone, setSubmitDone] = useState(false);
   const estimatedProgress = useSubmitProgress(phase === 'submitting' && !submitDone);
   const submitProgress = submitDone ? 100 : estimatedProgress;
+
+  // Whether this attempt started from "Update Calibration" (an existing
+  // calibration to fall back to) vs. first-time "Start Reading" (none yet)
+  // -- decides where Cancel/error sends the user back to.
+  const isUpdateRef = useRef(false);
+
+  useEffect(() => {
+    if (existingProfile === undefined) {
+      setPhase('loading');
+      return;
+    }
+    setPhase((prev) => (prev === 'loading' ? (existingProfile ? 'view' : 'intro') : prev));
+  }, [existingProfile]);
 
   async function handleStart() {
     setSubmitError(null);
@@ -83,14 +108,14 @@ export function CalibrationPage() {
       }
     } catch (err) {
       if (!recorder.isCancelled(err)) setPhase('error');
-      else setPhase('intro');
+      else setPhase(isUpdateRef.current ? 'view' : 'intro');
       return;
     }
 
     setSubmitDone(false);
     setPhase('submitting');
     try {
-      const record = await runCalibration(clips);
+      const record = await runCalibration(userId, clips);
       setResult(record);
       setSubmitDone(true);
       // Let the 100% state render for a beat instead of jumping straight
@@ -101,6 +126,11 @@ export function CalibrationPage() {
       setSubmitError(err instanceof CalibrationError ? err.message : 'Failed to process calibration');
       setPhase('error');
     }
+  }
+
+  function startUpdate() {
+    isUpdateRef.current = true;
+    void handleStart();
   }
 
   const progress = 1 - recorder.secondsRemaining / CALIBRATION_CLIP_DURATION_SEC;
@@ -124,7 +154,33 @@ export function CalibrationPage() {
         <span className="w-10" />
       </header>
 
-      {phase === 'summary' && result ? (
+      {phase === 'loading' && (
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-[var(--color-ink-muted)]">
+          <Spinner />
+          Loading your calibration…
+        </div>
+      )}
+
+      {phase === 'view' && existingProfile && (
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="flex min-h-full flex-col items-center justify-center gap-5 py-4">
+            <span className="glass-surface-raised inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-[var(--color-good)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-good)]" />
+              Current Calibration
+            </span>
+            <CalibrationSummary profile={existingProfile} />
+            <button
+              type="button"
+              onClick={startUpdate}
+              className="glass-btn glass-btn-accent w-full rounded-2xl py-4 text-lg font-bold text-white active:scale-[0.98]"
+            >
+              Update Calibration
+            </button>
+          </div>
+        </div>
+      )}
+
+      {phase === 'summary' && result && (
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="flex min-h-full flex-col items-center justify-center gap-5 py-4">
             <p className="text-sm font-medium text-[var(--color-good)]">Calibration complete</p>
@@ -138,7 +194,9 @@ export function CalibrationPage() {
             </button>
           </div>
         </div>
-      ) : (
+      )}
+
+      {(phase === 'intro' || phase === 'capturing' || phase === 'submitting' || phase === 'error') && (
         <>
           <div className="glass-surface mt-4 min-h-0 flex-1 overflow-y-auto rounded-2xl p-5">
             <p className="mb-3 text-xs font-medium uppercase tracking-wide text-[var(--color-ink-muted)]">
@@ -193,6 +251,20 @@ export function CalibrationPage() {
               >
                 {phase === 'error' ? 'Try Again' : 'Start Reading'}
               </button>
+            )}
+
+            {phase === 'error' && isUpdateRef.current && existingProfile && (
+              <button
+                type="button"
+                onClick={() => setPhase('view')}
+                className="glass-surface-raised w-full rounded-2xl py-4 text-base font-semibold text-[var(--color-ink-secondary)] active:scale-[0.98]"
+              >
+                Keep Current Calibration
+              </button>
+            )}
+
+            {phase === 'intro' && (
+              <p className="text-center text-xs text-[var(--color-ink-muted)]">First time calibrating — this sets your personal baseline.</p>
             )}
 
             {phase === 'capturing' && (

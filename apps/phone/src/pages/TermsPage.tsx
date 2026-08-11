@@ -22,7 +22,7 @@ const CONSENT_ITEMS: Array<{ key: keyof Consent; text: string }> = [
 ];
 
 /**
- * First-run consent gate (shown once per device -- see storage/account.ts).
+ * First-run consent gate (shown once per device -- see storage/device.ts).
  * Continue stays disabled until every required box is checked; the parent
  * (OnboardingFlow) owns persisting consent and the swipe transition into
  * AuthPage.

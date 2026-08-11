@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { generateDailyInsight, getDailySummary, type DailySummary } from '../storage/insights';
 import { formatMetric } from '../lib/formatMetric';
+import { useCurrentUser } from '../context/CurrentUserContext';
 
 function Stat({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
@@ -27,6 +28,7 @@ function formatMinutes(sec: number): string {
  */
 export function TodayPage() {
   const navigate = useNavigate();
+  const { logout } = useCurrentUser();
   const [summary, setSummary] = useState<DailySummary | null>(null);
   const [insight, setInsight] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,6 +95,14 @@ export function TodayPage() {
               </div>
             </>
           )}
+
+          <button
+            type="button"
+            onClick={logout}
+            className="mt-6 mb-2 w-full text-center text-xs font-medium text-[var(--color-ink-muted)] active:text-[var(--color-ink-secondary)]"
+          >
+            Log out
+          </button>
         </div>
       )}
     </div>

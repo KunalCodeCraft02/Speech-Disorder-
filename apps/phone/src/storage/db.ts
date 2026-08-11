@@ -4,11 +4,18 @@
 // survives reloads until the user explicitly recalibrates or clears data.
 
 const DB_NAME = 'speechbio';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
+// STORE_CALIBRATION (the old single global calibration slot) is no longer
+// written to -- calibration is now per-user in STORE_CALIBRATIONS, keyed
+// by userId. The old store name/key are kept exported so a device
+// upgrading from an earlier version can still read its one pre-existing
+// calibration during migration (see storage/calibration.ts).
 export const STORE_CALIBRATION = 'calibration';
+export const STORE_CALIBRATIONS = 'calibrations';
 export const STORE_SESSIONS = 'sessions';
 export const STORE_ACCOUNT = 'account';
+export const STORE_USERS = 'users';
 export const CALIBRATION_KEY = 'current';
 export const ACCOUNT_KEY = 'current';
 
@@ -27,12 +34,18 @@ export function openDatabase(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_CALIBRATION)) {
         db.createObjectStore(STORE_CALIBRATION);
       }
+      if (!db.objectStoreNames.contains(STORE_CALIBRATIONS)) {
+        db.createObjectStore(STORE_CALIBRATIONS);
+      }
       if (!db.objectStoreNames.contains(STORE_SESSIONS)) {
         const sessions = db.createObjectStore(STORE_SESSIONS, { keyPath: 'id' });
         sessions.createIndex('byDate', 'dateKey');
       }
       if (!db.objectStoreNames.contains(STORE_ACCOUNT)) {
         db.createObjectStore(STORE_ACCOUNT);
+      }
+      if (!db.objectStoreNames.contains(STORE_USERS)) {
+        db.createObjectStore(STORE_USERS, { keyPath: 'id' });
       }
     };
 

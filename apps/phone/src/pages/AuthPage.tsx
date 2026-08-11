@@ -1,28 +1,35 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import clsx from 'clsx';
 import { hashPin } from '../lib/pinHash';
-import { saveAccount, type AccountRecord } from '../storage/account';
+import { saveDeviceState, type DeviceState } from '../storage/device';
+import { createUser, findUserByName, listUsers } from '../storage/users';
 
 type Mode = 'login' | 'signup';
 const PIN_MIN_LENGTH = 4;
 
 /**
- * Local device Login/Sign-Up (see storage/account.ts's doc comment -- this
- * app has no server, so "account" means a single named profile + PIN
- * gating this one device, not a network-authenticated identity). Sign Up
- * creates the profile; Login just re-enters its PIN. Only one profile
- * exists per device, matching the rest of the app's single-patient design,
- * so the tab that doesn't apply yet explains why instead of rendering a
- * form that couldn't do anything.
+ * Local device Login/Sign-Up (see storage/users.ts's doc comment -- this
+ * app has no server, so an "account" is a named local profile + PIN, not a
+ * network-authenticated identity). Multiple profiles can exist on one
+ * device -- Sign Up always creates a new one; Login looks an existing one
+ * up by name and checks its PIN, so a device with several profiles (e.g. a
+ * shared tablet) can switch between them via logout -> Login.
  */
-export function AuthPage({ account, onAuthenticated }: { account: AccountRecord; onAuthenticated: (updated: AccountRecord) => void }) {
-  const hasProfile = account.profileName != null && account.pinHash != null;
-  const [mode, setMode] = useState<Mode>(hasProfile ? 'login' : 'signup');
+export function AuthPage({ device, onAuthenticated }: { device: DeviceState; onAuthenticated: (updated: DeviceState) => void }) {
+  const [hasAnyUser, setHasAnyUser] = useState<boolean | null>(null); // null = still checking
+  const [mode, setMode] = useState<Mode>('login');
   const [name, setName] = useState('');
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    listUsers().then((users) => {
+      setHasAnyUser(users.length > 0);
+      setMode(users.length > 0 ? 'login' : 'signup');
+    });
+  }, []);
 
   async function handleSignUp() {
     setError(null);
@@ -32,9 +39,14 @@ export function AuthPage({ account, onAuthenticated }: { account: AccountRecord;
 
     setBusy(true);
     try {
+      if (await findUserByName(name)) {
+        setError('That name is already used on this device. Try Login, or pick a different name.');
+        return;
+      }
       const pinHash = await hashPin(pin);
-      const updated: AccountRecord = { ...account, profileName: name.trim(), pinHash, loggedIn: true };
-      await saveAccount(updated);
+      const user = await createUser(name, pinHash);
+      const updated: DeviceState = { ...device, currentUserId: user.id };
+      await saveDeviceState(updated);
       onAuthenticated(updated);
     } finally {
       setBusy(false);
@@ -43,17 +55,23 @@ export function AuthPage({ account, onAuthenticated }: { account: AccountRecord;
 
   async function handleLogin() {
     setError(null);
+    if (name.trim().length === 0) return setError('Please enter your name.');
     if (pin.length === 0) return setError('Please enter your PIN.');
 
     setBusy(true);
     try {
+      const user = await findUserByName(name);
+      if (!user) {
+        setError('No profile with that name on this device. Try Sign Up instead.');
+        return;
+      }
       const pinHash = await hashPin(pin);
-      if (pinHash !== account.pinHash) {
+      if (pinHash !== user.pinHash) {
         setError('Incorrect PIN.');
         return;
       }
-      const updated: AccountRecord = { ...account, loggedIn: true };
-      await saveAccount(updated);
+      const updated: DeviceState = { ...device, currentUserId: user.id };
+      await saveDeviceState(updated);
       onAuthenticated(updated);
     } finally {
       setBusy(false);
@@ -90,34 +108,28 @@ export function AuthPage({ account, onAuthenticated }: { account: AccountRecord;
           ))}
         </div>
 
-        {mode === 'signup' && hasProfile && (
-          <p className="mb-3 text-center text-xs text-[var(--color-warning)]">
-            A profile already exists on this device ({account.profileName}). Switch to Login instead.
-          </p>
+        {hasAnyUser === false && mode === 'login' && (
+          <p className="mb-3 text-center text-xs text-[var(--color-warning)]">No profiles on this device yet — switch to Sign Up to create one.</p>
         )}
 
-        {mode === 'login' && !hasProfile && (
-          <p className="mb-3 text-center text-xs text-[var(--color-warning)]">No profile on this device yet — switch to Sign Up to create one.</p>
-        )}
-
-        {mode === 'signup' && !hasProfile && (
-          <div className="flex flex-col gap-3">
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Your name"
-              autoComplete="name"
-              className="glass-surface-raised rounded-xl px-4 py-3 text-sm text-[var(--color-ink)] placeholder:text-[var(--color-ink-muted)] focus:outline-none"
-            />
-            <input
-              type="password"
-              inputMode="numeric"
-              value={pin}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-              placeholder={`Create a PIN (min ${PIN_MIN_LENGTH} digits)`}
-              className="glass-surface-raised rounded-xl px-4 py-3 text-sm text-[var(--color-ink)] placeholder:text-[var(--color-ink-muted)] focus:outline-none"
-            />
+        <div className="flex flex-col gap-3">
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Your name"
+            autoComplete="name"
+            className="glass-surface-raised rounded-xl px-4 py-3 text-sm text-[var(--color-ink)] placeholder:text-[var(--color-ink-muted)] focus:outline-none"
+          />
+          <input
+            type="password"
+            inputMode="numeric"
+            value={pin}
+            onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+            placeholder={mode === 'signup' ? `Create a PIN (min ${PIN_MIN_LENGTH} digits)` : 'Enter your PIN'}
+            className="glass-surface-raised rounded-xl px-4 py-3 text-sm text-[var(--color-ink)] placeholder:text-[var(--color-ink-muted)] focus:outline-none"
+          />
+          {mode === 'signup' && (
             <input
               type="password"
               inputMode="numeric"
@@ -126,46 +138,20 @@ export function AuthPage({ account, onAuthenticated }: { account: AccountRecord;
               placeholder="Confirm PIN"
               className="glass-surface-raised rounded-xl px-4 py-3 text-sm text-[var(--color-ink)] placeholder:text-[var(--color-ink-muted)] focus:outline-none"
             />
-            {error && <p className="text-center text-xs text-[var(--color-critical)]">{error}</p>}
-            <button
-              type="button"
-              onClick={() => void handleSignUp()}
-              disabled={busy}
-              className="glass-btn glass-btn-accent mt-1 w-full rounded-xl py-3 text-base font-bold text-white transition-all active:scale-[0.98] disabled:opacity-60"
-            >
-              {busy ? 'Creating…' : 'Sign Up'}
-            </button>
-          </div>
-        )}
-
-        {mode === 'login' && hasProfile && (
-          <div className="flex flex-col gap-3">
-            <p className="text-center text-sm text-[var(--color-ink-secondary)]">
-              Welcome back, <span className="font-semibold text-[var(--color-ink)]">{account.profileName}</span>
-            </p>
-            <input
-              type="password"
-              inputMode="numeric"
-              value={pin}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-              placeholder="Enter your PIN"
-              autoFocus
-              className="glass-surface-raised rounded-xl px-4 py-3 text-center text-sm tracking-[0.3em] text-[var(--color-ink)] placeholder:tracking-normal placeholder:text-[var(--color-ink-muted)] focus:outline-none"
-            />
-            {error && <p className="text-center text-xs text-[var(--color-critical)]">{error}</p>}
-            <button
-              type="button"
-              onClick={() => void handleLogin()}
-              disabled={busy}
-              className="glass-btn glass-btn-accent mt-1 w-full rounded-xl py-3 text-base font-bold text-white transition-all active:scale-[0.98] disabled:opacity-60"
-            >
-              {busy ? 'Logging in…' : 'Log In'}
-            </button>
-          </div>
-        )}
+          )}
+          {error && <p className="text-center text-xs text-[var(--color-critical)]">{error}</p>}
+          <button
+            type="button"
+            onClick={() => void (mode === 'signup' ? handleSignUp() : handleLogin())}
+            disabled={busy || hasAnyUser === null}
+            className="glass-btn glass-btn-accent mt-1 w-full rounded-xl py-3 text-base font-bold text-white transition-all active:scale-[0.98] disabled:opacity-60"
+          >
+            {mode === 'signup' ? (busy ? 'Creating…' : 'Sign Up') : busy ? 'Logging in…' : 'Log In'}
+          </button>
+        </div>
       </div>
 
-      <p className="mt-4 text-center text-[11px] text-[var(--color-ink-muted)]">Your profile and PIN stay on this device only.</p>
+      <p className="mt-4 text-center text-[11px] text-[var(--color-ink-muted)]">Your profile, PIN, and calibration stay on this device only.</p>
     </div>
   );
 }

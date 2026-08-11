@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { TermsPage } from './TermsPage';
 import { AuthPage } from './AuthPage';
-import { saveAccount, type AccountRecord } from '../storage/account';
+import { saveDeviceState, type DeviceState } from '../storage/device';
 
 type Step = 'terms' | 'auth';
 
@@ -12,19 +12,19 @@ type Step = 'terms' | 'auth';
  * animation, no extra dependency -- so the step change reads as one
  * continuous swipe instead of an instant page replace.
  *
- * A returning device that already accepted consent (but isn't logged in --
- * e.g. app data was cleared) starts straight on the `auth` step with no
+ * A returning device that already accepted consent (but has no signed-in
+ * user -- e.g. after logout) starts straight on the `auth` step with no
  * animation, since the swipe is specifically the Terms->Auth transition,
  * not a general step indicator.
  */
-export function OnboardingFlow({ account, onComplete }: { account: AccountRecord; onComplete: (updated: AccountRecord) => void }) {
-  const [step, setStep] = useState<Step>(account.consentAcceptedAt ? 'auth' : 'terms');
-  const [localAccount, setLocalAccount] = useState(account);
+export function OnboardingFlow({ device, onComplete }: { device: DeviceState; onComplete: (updated: DeviceState) => void }) {
+  const [step, setStep] = useState<Step>(device.consentAcceptedAt ? 'auth' : 'terms');
+  const [localDevice, setLocalDevice] = useState(device);
 
   async function handleContinue() {
-    const updated: AccountRecord = { ...localAccount, consentAcceptedAt: new Date().toISOString() };
-    await saveAccount(updated);
-    setLocalAccount(updated);
+    const updated: DeviceState = { ...localDevice, consentAcceptedAt: new Date().toISOString() };
+    await saveDeviceState(updated);
+    setLocalDevice(updated);
     setStep('auth');
   }
 
@@ -38,7 +38,7 @@ export function OnboardingFlow({ account, onComplete }: { account: AccountRecord
           <TermsPage onContinue={() => void handleContinue()} />
         </div>
         <div className="h-full w-1/2 shrink-0">
-          <AuthPage account={localAccount} onAuthenticated={onComplete} />
+          <AuthPage device={localDevice} onAuthenticated={onComplete} />
         </div>
       </div>
     </div>

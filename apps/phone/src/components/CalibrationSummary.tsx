@@ -48,7 +48,7 @@ export function CalibrationSummary({ profile }: { profile: CalibrationRecord }) 
 
       <p className="text-center text-xs text-[var(--color-ink-muted)]">
         Calibrated from a {profile.durationSec ? Math.round(profile.durationSec) : 'N/A'}s reading
-        {profile.calibratedAt && ` · ${new Date(profile.calibratedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`}
+        {profile.updatedAt && ` · ${new Date(profile.updatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`}
       </p>
     </div>
   );
