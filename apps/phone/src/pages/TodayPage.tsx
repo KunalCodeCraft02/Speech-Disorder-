@@ -5,7 +5,7 @@ import { formatMetric } from '../lib/formatMetric';
 
 function Stat({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
-    <div className="flex flex-col items-center gap-0.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-3">
+    <div className="glass-surface-raised flex flex-col items-center gap-0.5 rounded-xl px-3 py-3">
       <span className="tabular-nums text-xl font-semibold text-[var(--color-ink)]">
         {value}
         {unit && <span className="ml-1 text-xs font-normal text-[var(--color-ink-muted)]">{unit}</span>}
@@ -66,7 +66,7 @@ export function TodayPage() {
         <div className="flex flex-1 items-center justify-center text-sm text-[var(--color-ink-muted)]">Loading…</div>
       ) : (
         <div className="mt-4 min-h-0 flex-1 overflow-y-auto pb-4">
-          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+          <div className="glass-surface rounded-2xl p-4">
             <p className="text-sm leading-relaxed text-[var(--color-ink-secondary)]">{insight}</p>
           </div>
 
@@ -82,10 +82,7 @@ export function TodayPage() {
               <h2 className="mt-6 mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-ink-muted)]">Sessions</h2>
               <div className="flex flex-col gap-2">
                 {summary.sessions.map((s) => (
-                  <div
-                    key={s.id}
-                    className="flex items-center justify-between rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3"
-                  >
+                  <div key={s.id} className="glass-surface-raised flex items-center justify-between rounded-xl px-4 py-3">
                     <span className="text-sm text-[var(--color-ink-secondary)]">
                       {new Date(s.startedAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
                     </span>

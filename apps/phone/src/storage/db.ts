@@ -4,11 +4,13 @@
 // survives reloads until the user explicitly recalibrates or clears data.
 
 const DB_NAME = 'speechbio';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export const STORE_CALIBRATION = 'calibration';
 export const STORE_SESSIONS = 'sessions';
+export const STORE_ACCOUNT = 'account';
 export const CALIBRATION_KEY = 'current';
+export const ACCOUNT_KEY = 'current';
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -16,6 +18,10 @@ export function openDatabase(): Promise<IDBDatabase> {
   dbPromise ??= new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
+    // Fires on first open (fresh install) AND on every version bump for an
+    // existing install -- each `contains` guard is idempotent, so an
+    // upgrading device only ever gets the stores it's missing, never a
+    // destructive recreate of ones it already has.
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE_CALIBRATION)) {
@@ -24,6 +30,9 @@ export function openDatabase(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_SESSIONS)) {
         const sessions = db.createObjectStore(STORE_SESSIONS, { keyPath: 'id' });
         sessions.createIndex('byDate', 'dateKey');
+      }
+      if (!db.objectStoreNames.contains(STORE_ACCOUNT)) {
+        db.createObjectStore(STORE_ACCOUNT);
       }
     };
 

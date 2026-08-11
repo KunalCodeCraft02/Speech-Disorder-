@@ -4,7 +4,7 @@ import { formatMetric, formatCount, formatPercent, NA } from '../lib/formatMetri
 
 function Tile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-0.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-2 py-2">
+    <div className="glass-surface-raised flex flex-col items-center justify-center gap-0.5 rounded-lg px-2 py-2">
       <span className={`tabular-nums text-xs font-semibold ${value === NA ? 'text-[var(--color-ink-muted)]' : 'text-[var(--color-ink)]'}`}>{value}</span>
       <span className="text-center text-[9px] uppercase tracking-wide text-[var(--color-ink-muted)]">{label}</span>
     </div>
@@ -27,7 +27,7 @@ export function SecondaryMetricsPanel({ frame }: { frame: MetricsFrame | null })
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+    <div className="glass-surface rounded-xl">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

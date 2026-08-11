@@ -76,6 +76,66 @@ body {
 }
 
 /*
+  Dark glassmorphism design system. Two reusable surface classes replace
+  the old flat `bg-[var(--color-surface)] border border-[var(--color-border)]`
+  pairing used throughout the app -- same tokens, now semi-transparent with
+  a backdrop blur, a subtle border, and a soft shadow, so every card reads
+  as "glass" rather than a flat tinted rectangle. Blur alone is visually
+  inert over a flat background (see .glass-blob below), so body::before/
+  ::after paint a couple of soft, fixed color fields behind *everything*,
+  not just the Start/Stop screen, giving every glass surface something to
+  refract no matter which screen it's on.
+*/
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  z-index: -1;
+  border-radius: 9999px;
+  filter: blur(90px);
+  pointer-events: none;
+}
+
+body::before {
+  top: -10%;
+  left: -15%;
+  height: 45vh;
+  width: 45vh;
+  background: rgba(91, 82, 232, 0.22);
+}
+
+body::after {
+  bottom: -12%;
+  right: -15%;
+  height: 50vh;
+  width: 50vh;
+  background: rgba(53, 201, 221, 0.16);
+}
+
+.glass-surface {
+  background: rgba(16, 19, 30, 0.6);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid var(--color-border);
+  box-shadow:
+    0 8px 32px -16px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.glass-surface-raised {
+  background: rgba(22, 26, 41, 0.55);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid var(--color-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.glass-btn-accent {
+  --glass-glow: rgba(91, 82, 232, 0.5);
+  background: linear-gradient(135deg, rgba(124, 108, 240, 0.7), rgba(53, 201, 221, 0.45));
+}
+
+/*
   Liquid-glass Start/Stop buttons: a translucent, blurred "material"
   instead of a flat fill, with a soft inner sheen along the top edge
   (the highlight a curved glass surface catches) and a colored glow

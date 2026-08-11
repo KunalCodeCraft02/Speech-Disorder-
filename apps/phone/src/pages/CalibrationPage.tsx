@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import clsx from 'clsx';
 import { useCalibrationRecorder } from '../hooks/useCalibrationRecorder';
 import { runCalibration, CalibrationError } from '../lib/calibrationEngine';
 import { CALIBRATION_CLIP_DURATION_SEC, CALIBRATION_PASSAGES } from '../lib/calibrationPassage';
@@ -133,7 +132,7 @@ export function CalibrationPage() {
             <button
               type="button"
               onClick={() => navigate('/')}
-              className="w-full rounded-2xl bg-[var(--color-accent)] py-4 text-lg font-bold text-white active:scale-[0.98]"
+              className="glass-btn glass-btn-accent w-full rounded-2xl py-4 text-lg font-bold text-white active:scale-[0.98]"
             >
               Done
             </button>
@@ -141,7 +140,7 @@ export function CalibrationPage() {
         </div>
       ) : (
         <>
-          <div className="mt-4 min-h-0 flex-1 overflow-y-auto rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+          <div className="glass-surface mt-4 min-h-0 flex-1 overflow-y-auto rounded-2xl p-5">
             <p className="mb-3 text-xs font-medium uppercase tracking-wide text-[var(--color-ink-muted)]">
               {phase === 'capturing' ? `Clip ${clipIndex + 1} of ${CLIP_COUNT}` : `${CLIP_COUNT} short readings, ~${CALIBRATION_CLIP_DURATION_SEC}s each`}
               {' — read aloud, at your normal pace'}
@@ -190,7 +189,7 @@ export function CalibrationPage() {
               <button
                 type="button"
                 onClick={() => void handleStart()}
-                className="w-full rounded-2xl bg-[var(--color-accent)] py-5 text-xl font-bold text-white active:scale-[0.98]"
+                className="glass-btn glass-btn-accent w-full rounded-2xl py-5 text-xl font-bold text-white active:scale-[0.98]"
               >
                 {phase === 'error' ? 'Try Again' : 'Start Reading'}
               </button>
@@ -200,10 +199,7 @@ export function CalibrationPage() {
               <button
                 type="button"
                 onClick={recorder.cancel}
-                className={clsx(
-                  'w-full rounded-2xl py-4 text-base font-semibold text-[var(--color-ink-secondary)] active:scale-[0.98]',
-                  'bg-[var(--color-surface-raised)]'
-                )}
+                className="glass-surface-raised w-full rounded-2xl py-4 text-base font-semibold text-[var(--color-ink-secondary)] active:scale-[0.98]"
               >
                 Cancel
               </button>

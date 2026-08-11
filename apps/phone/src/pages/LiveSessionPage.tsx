@@ -22,16 +22,16 @@ const RECORDING_CONFIG: Record<RecordingState, { label: string; color: string; p
 
 function NavPill({ to, label, disabled, accent }: { to: string; label: string; disabled: boolean; accent?: boolean }) {
   if (disabled) {
-    return <span className="rounded-full border border-[var(--color-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-ink-muted)] opacity-40">{label}</span>;
+    return <span className="glass-surface-raised rounded-full px-3 py-1.5 text-xs font-medium text-[var(--color-ink-muted)] opacity-40">{label}</span>;
   }
   return (
     <Link
       to={to}
       className={clsx(
-        'rounded-full border px-3 py-1.5 text-xs font-medium active:scale-[0.97]',
+        'rounded-full px-3 py-1.5 text-xs font-medium backdrop-blur-xl active:scale-[0.97]',
         accent
-          ? 'border-[var(--color-accent)]/40 bg-[var(--color-accent)]/15 text-[var(--color-accent-2)]'
-          : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink-secondary)] active:bg-[var(--color-surface-hover)]'
+          ? 'border border-[var(--color-accent)]/40 bg-[var(--color-accent)]/15 text-[var(--color-accent-2)]'
+          : 'glass-surface text-[var(--color-ink-secondary)] active:bg-[var(--color-surface-hover)]'
       )}
     >
       {label}
@@ -90,7 +90,7 @@ export function LiveSessionPage() {
           {!isRecording && calibration === null && (
             <Link
               to="/calibrate"
-              className="flex w-full items-center justify-between gap-3 rounded-2xl border border-[var(--color-accent)]/30 bg-[var(--color-accent)]/10 px-4 py-3 active:bg-[var(--color-accent)]/20"
+              className="flex w-full items-center justify-between gap-3 rounded-2xl border border-[var(--color-accent)]/30 bg-[var(--color-accent)]/10 px-4 py-3 backdrop-blur-xl active:bg-[var(--color-accent)]/20"
             >
               <span className="text-sm text-[var(--color-ink)]">
                 <span className="font-semibold">Set up your baseline</span> — calibrate your voice to enable detection

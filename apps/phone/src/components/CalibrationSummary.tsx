@@ -3,7 +3,7 @@ import { formatMetric, formatPercent } from '../lib/formatMetric';
 
 function Stat({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
-    <div className="flex flex-col items-center gap-0.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-3">
+    <div className="glass-surface-raised flex flex-col items-center gap-0.5 rounded-xl px-3 py-3">
       <span className="tabular-nums text-xl font-semibold text-[var(--color-ink)]">
         {value}
         {unit && <span className="ml-1 text-xs font-normal text-[var(--color-ink-muted)]">{unit}</span>}
@@ -19,11 +19,11 @@ export function CalibrationSummary({ profile }: { profile: CalibrationRecord }) 
   return (
     <div className="flex w-full flex-col gap-4">
       {profile.isPersonal ? (
-        <span className="mx-auto inline-flex items-center rounded-full border border-[var(--color-good)]/40 bg-[var(--color-good)]/10 px-2.5 py-1 text-[11px] font-medium text-[var(--color-good)]">
+        <span className="mx-auto inline-flex items-center rounded-full border border-[var(--color-good)]/40 bg-[var(--color-good)]/10 backdrop-blur-xl px-2.5 py-1 text-[11px] font-medium text-[var(--color-good)]">
           Personal baseline — z-score classification
         </span>
       ) : (
-        <span className="mx-auto inline-flex items-center rounded-full border border-[var(--color-warning)]/40 bg-[var(--color-warning)]/10 px-2.5 py-1 text-[11px] font-medium text-[var(--color-warning)]">
+        <span className="mx-auto inline-flex items-center rounded-full border border-[var(--color-warning)]/40 bg-[var(--color-warning)]/10 backdrop-blur-xl px-2.5 py-1 text-[11px] font-medium text-[var(--color-warning)]">
           No personal std — lower-confidence fallback
         </span>
       )}
@@ -37,7 +37,7 @@ export function CalibrationSummary({ profile }: { profile: CalibrationRecord }) 
         <Stat label="Speech Ratio" value={formatPercent(profile.baselineSpeechRatio != null ? profile.baselineSpeechRatio * 100 : null, 0)} />
       </div>
 
-      <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3 text-sm">
+      <div className="glass-surface-raised rounded-xl px-4 py-3 text-sm">
         <div className="flex items-center justify-between">
           <span className="text-[var(--color-ink-muted)]">Tachylalia threshold</span>
           <span className="tabular-nums font-medium text-[var(--color-critical)]">

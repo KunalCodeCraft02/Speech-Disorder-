@@ -3,32 +3,28 @@ import type { MetricsFrame } from '../dsp/sessionPipeline';
 import { formatMetric, NA } from '../lib/formatMetric';
 import { PARAMS, tierForZ, type Tier } from './paramConfig';
 
-const TIER_STYLE: Record<Tier, { border: string; ring: string; bg: string; dot: string; text: string }> = {
+// Tier signal is carried by `ring` (box-shadow, layers cleanly over the
+// glass-surface-raised class's own border/background) plus the dot/text
+// color -- not by overriding glass-surface-raised's border-color, which
+// would fight CSS cascade order against a plain Tailwind border-* utility.
+const TIER_STYLE: Record<Tier, { ring: string; dot: string; text: string }> = {
   uncalibrated: {
-    border: 'border-[var(--color-border)]',
     ring: '',
-    bg: 'bg-[var(--color-surface-raised)]',
     dot: 'bg-[var(--color-ink-muted)]',
     text: 'text-[var(--color-ink-muted)]',
   },
   normal: {
-    border: 'border-[var(--color-border-strong)]',
     ring: '',
-    bg: 'bg-[var(--color-surface-raised)]',
     dot: 'bg-[var(--color-good)]',
     text: 'text-[var(--color-ink)]',
   },
   elevated: {
-    border: 'border-[var(--color-warning)]/50',
-    ring: 'ring-1 ring-[var(--color-warning)]/20',
-    bg: 'bg-[var(--color-warning)]/[0.07]',
+    ring: 'ring-1 ring-[var(--color-warning)]/40',
     dot: 'bg-[var(--color-warning)]',
     text: 'text-[var(--color-warning)]',
   },
   abnormal: {
-    border: 'border-[var(--color-critical)]/60',
-    ring: 'ring-1 ring-[var(--color-critical)]/25',
-    bg: 'bg-[var(--color-critical)]/[0.08]',
+    ring: 'ring-1 ring-[var(--color-critical)]/50',
     dot: 'bg-[var(--color-critical)]',
     text: 'text-[var(--color-critical)]',
   },
@@ -56,12 +52,7 @@ export function ParamGrid({ frame, calibrated }: { frame: MetricsFrame | null; c
         return (
           <div
             key={param.key}
-            className={clsx(
-              'flex flex-col items-center justify-center gap-1 rounded-2xl border px-2 py-3 transition-all duration-300',
-              style.border,
-              style.ring,
-              style.bg
-            )}
+            className={clsx('glass-surface-raised flex flex-col items-center justify-center gap-1 rounded-2xl px-2 py-3 transition-all duration-300', style.ring)}
           >
             <span className={clsx('tabular-nums text-base font-semibold', hasValue ? style.text : 'text-[var(--color-ink-muted)]')}>
               {displayValue}

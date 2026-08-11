@@ -86,7 +86,7 @@ export function LiveTrendChart({
   const meanY = baselineMean != null ? yScale(baselineMean) : null;
 
   return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+    <div className="glass-surface rounded-xl p-3">
       <div className="mb-1 flex items-baseline justify-between">
         <span className="text-xs font-semibold text-[var(--color-ink-secondary)]">{title}</span>
         <span className="tabular-nums text-sm font-semibold" style={{ color }}>

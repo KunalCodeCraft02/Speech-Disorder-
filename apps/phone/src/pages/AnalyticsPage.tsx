@@ -49,7 +49,7 @@ export function AnalyticsPage() {
 
       <div className="mt-4 min-h-0 flex-1 overflow-y-auto pb-4">
         {!isRecording && history.length === 0 && (
-          <p className="mb-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-center text-xs text-[var(--color-ink-muted)]">
+          <p className="glass-surface mb-3 rounded-xl px-4 py-3 text-center text-xs text-[var(--color-ink-muted)]">
             Start a session on the Main screen to see live graphs here.
           </p>
         )}
