@@ -326,7 +326,7 @@ files, editable directly.
 | `compositeZSmoothingAlpha` | 0.35 | EMA smoothing factor applied to `compositeZ` before it's compared against `zTachylalia`, so a single burst can't cross the threshold alone |
 | `minSyllablesPerWindow` | 3 | Below this, a window can't produce a raw label |
 | `minPhonationSecPerWindow` | 1.0 s | Below this, a window can't produce a raw label |
-| `zTachylalia` | 1.4 | Smoothed-`compositeZ` threshold to raise a tachylalia label (personal baselines) |
+| `zTachylalia` | 1.1 | Smoothed-`compositeZ` threshold to raise a tachylalia label (personal baselines) |
 | `baselineStdFloor` | 0.15 syll/s | Floors `baselineArticulationRateStd` as a z-score denominator |
 | `toneAlertZThreshold` / `toneAlertSustainSec` | 1.5 / 3.0 s | Informational pitch/tone toast (no vibration) — see §6.3 |
 | `toneAlertSmoothingAlpha` / `toneAlertCooldownSec` / `toneAlertToastVisibleSec` | 0.35 / 6.0 s / 4.0 s | EMA smoothing, minimum re-fire gap, and toast visible duration for the tone alert |

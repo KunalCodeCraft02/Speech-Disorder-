@@ -88,11 +88,18 @@ export const settings: Settings = {
   // A single feature moving `zTachylalia` std devs on its own crosses
   // compositeZ's weighted threshold at zTachylalia/weight sigma for that
   // feature alone (e.g. rate-only at weight 0.6 needed ~3.3 sigma at the
-  // old zTachylalia=2.0 -- an unrealistically extreme, sustained rate
-  // increase). 1.4 keeps compositeZ statistically meaningful (a genuine,
-  // multi-feature-corroborated deviation) while reachable by a real,
-  // noticeably-fast reading rather than requiring an extreme outlier.
-  zTachylalia: 1.4,
+  // original zTachylalia=2.0 -- an unrealistically extreme, sustained rate
+  // increase). Lowered to 1.4, then to 1.1: speechToPauseRatio used to be
+  // a session-cumulative ratio that could drift and inflate z_pause on its
+  // own (see features.ts's windowedPauseSec), which was quietly helping
+  // borderline-fast speech cross 1.4; now that z_pause is properly
+  // windowed and no longer contributes that spurious lift, 1.4 required
+  // near-extreme, unnaturally fast speech to trigger. 1.1 (rate-only now
+  // needs ~1.8 sigma alone) is reachable by a real, moderately-fast,
+  // sustained reading without going back to flagging everyday variation --
+  // hysteresisWindows/hysteresisSustainSec/compositeZSmoothingAlpha are
+  // unchanged, so a single fast burst still can't trigger on its own.
+  zTachylalia: 1.1,
   baselineStdFloor: 0.15,
 
   // |zPitch| already divides by the patient's own calibrated pitch std
