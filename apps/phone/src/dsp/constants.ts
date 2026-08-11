@@ -90,3 +90,8 @@ export const LOUDNESS_STD_FLOOR = 2.0;
 export const VOICE_ACTIVITY_STD_FLOOR = 5.0;
 
 export const EPS = 1e-10;
+
+// Below this much elapsed recording time, a "0 pauses so far" reading is
+// still just "not enough data yet" (N/A); at or beyond it, 0 completed
+// pauses is treated as a genuine, meaningful finding for that metric.
+export const MIN_ELAPSED_FOR_ZERO_METRIC_SEC = 2.0;

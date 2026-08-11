@@ -114,7 +114,11 @@ export const PARAMS: ParamDef[] = [
     key: 'loudness',
     label: 'Loudness',
     shortLabel: 'Loudness',
-    unit: 'dB',
+    // dBFS-style relative energy level from the VAD's frame energy
+    // estimate (0 dBFS ~= digital full scale), not a calibrated
+    // microphone-relative SPL reading -- see features.ts's
+    // windowedLoudnessDb() doc comment.
+    unit: 'dBFS',
     digits: 1,
     feedsComposite: false,
     value: (f) => f.loudnessDb,

@@ -1,4 +1,5 @@
 import type { CalibrationRecord } from '../storage/calibration';
+import { formatMetric, formatPercent } from '../lib/formatMetric';
 
 function Stat({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
@@ -12,7 +13,7 @@ function Stat({ label, value, unit }: { label: string; value: string; unit?: str
   );
 }
 
-const fmt = (v: number | null, digits = 1) => (v == null ? '—' : v.toFixed(digits));
+const fmt = formatMetric;
 
 export function CalibrationSummary({ profile }: { profile: CalibrationRecord }) {
   return (
@@ -31,13 +32,9 @@ export function CalibrationSummary({ profile }: { profile: CalibrationRecord }) 
         <Stat label="Speech Rate" value={fmt(profile.baselineSpeechRateWPM, 0)} unit="wpm" />
         <Stat label="Articulation Rate" value={fmt(profile.baselineArticulationRate, 2)} unit="syll/s" />
         <Stat label="Pitch" value={fmt(profile.baselineMeanPitchHz, 0)} unit="Hz" />
-        <Stat label="Loudness" value={fmt(profile.baselineLoudnessDb, 1)} unit="dB" />
+        <Stat label="Loudness" value={fmt(profile.baselineLoudnessDb, 1)} unit="dBFS" />
         <Stat label="Pause Duration" value={fmt(profile.baselinePauseDurationSec, 2)} unit="sec" />
-        <Stat
-          label="Speech Ratio"
-          value={profile.baselineSpeechRatio == null ? '—' : Math.round(profile.baselineSpeechRatio * 100).toString()}
-          unit="%"
-        />
+        <Stat label="Speech Ratio" value={formatPercent(profile.baselineSpeechRatio != null ? profile.baselineSpeechRatio * 100 : null, 0)} />
       </div>
 
       <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3 text-sm">
@@ -50,7 +47,7 @@ export function CalibrationSummary({ profile }: { profile: CalibrationRecord }) 
       </div>
 
       <p className="text-center text-xs text-[var(--color-ink-muted)]">
-        Calibrated from a {profile.durationSec ? Math.round(profile.durationSec) : '—'}s reading
+        Calibrated from a {profile.durationSec ? Math.round(profile.durationSec) : 'N/A'}s reading
         {profile.calibratedAt && ` · ${new Date(profile.calibratedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`}
       </p>
     </div>

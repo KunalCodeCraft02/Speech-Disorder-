@@ -1,50 +1,53 @@
-// Native haptics wrapper (Part A). navigator.vibrate() is unreliable inside
-// a Capacitor WebView on real devices -- Capacitor's Haptics plugin talks to
-// the platform's native haptic engine directly and is the reliable path.
-// Falls back to navigator.vibrate() on the web (Capacitor.isNativePlatform()
-// is false there), and finally to a synthesized beep + visual pulse if
-// neither is available (e.g. iOS Safari with vibrate unsupported).
+// Native haptics wrapper for the tachylalia (speech-rate) alert only.
+// navigator.vibrate() is unreliable inside a Capacitor WebView on real
+// devices -- Capacitor's Haptics plugin talks to the platform's native
+// haptic engine directly and is the reliable path. Falls back to
+// navigator.vibrate() on the web (Capacitor.isNativePlatform() is false
+// there), and finally to a synthesized beep + visual pulse if neither is
+// available (e.g. iOS Safari with vibrate unsupported).
 //
-// The two alerts must always feel distinct and must never share a call site,
-// so a caller can never accidentally fire one pattern through the other's
-// cooldown:
-//   - mainAlertHaptic(): tachylalia trigger — two Heavy impacts, 100ms apart.
-//   - toneAlertHaptic(): "lower your tone" cue — one Warning notification.
+// Pitch/tone feedback must never vibrate the device (toast-only, see
+// usePitchAlert.ts) -- this module intentionally exposes no tone/pitch
+// entry point, so there is nothing here for that alert to accidentally
+// call into.
 
 import { Capacitor } from '@capacitor/core';
-import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
+import { Haptics } from '@capacitor/haptics';
 
-const MAIN_ALERT_VIBRATION_PATTERN = [80, 60, 80, 60, 80];
-const TONE_ALERT_VIBRATION_PATTERN = [50];
+// The alert must be clearly felt, not a quick tap -- a continuous buzz
+// comfortably over the 2s floor.
+const MAIN_ALERT_DURATION_MS = 2200;
 
 const VIBRATE_SUPPORTED = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+let inFlight = false;
 
-/** Main tachylalia alert: two Heavy impacts 100ms apart. Returns false if neither native Haptics nor navigator.vibrate fired, so the caller can fall back to the beep+visual pulse. */
+/**
+ * Tachylalia alert: one continuous ~2.2s vibration. The classifier's
+ * edge+refractory logic (feedbackRefractorySec, 4.0s) already prevents
+ * back-to-back triggers while the condition stays continuously abnormal --
+ * `inFlight` is a defensive second guard so even a caller bug can't stack
+ * two overlapping vibrate() calls into one another.
+ *
+ * Returns false if neither native Haptics nor navigator.vibrate fired, so
+ * the caller can fall back to the beep+visual pulse.
+ */
 export async function mainAlertHaptic(): Promise<boolean> {
-  if (Capacitor.isNativePlatform()) {
-    await Haptics.impact({ style: ImpactStyle.Heavy });
-    await sleep(100);
-    await Haptics.impact({ style: ImpactStyle.Heavy });
-    return true;
-  }
-  if (VIBRATE_SUPPORTED) {
-    navigator.vibrate(MAIN_ALERT_VIBRATION_PATTERN);
-    return true;
-  }
-  return false;
-}
-
-/** Tone (pitch-rising) alert: a single Warning notification -- its own pattern, never mainAlertHaptic's. */
-export async function toneAlertHaptic(): Promise<void> {
-  if (Capacitor.isNativePlatform()) {
-    await Haptics.notification({ type: NotificationType.Warning });
-    return;
-  }
-  if (VIBRATE_SUPPORTED) {
-    navigator.vibrate(TONE_ALERT_VIBRATION_PATTERN);
+  if (inFlight) return true;
+  inFlight = true;
+  try {
+    if (Capacitor.isNativePlatform()) {
+      await Haptics.vibrate({ duration: MAIN_ALERT_DURATION_MS });
+      return true;
+    }
+    if (VIBRATE_SUPPORTED) {
+      navigator.vibrate(MAIN_ALERT_DURATION_MS);
+      return true;
+    }
+    return false;
+  } finally {
+    setTimeout(() => {
+      inFlight = false;
+    }, MAIN_ALERT_DURATION_MS);
   }
 }

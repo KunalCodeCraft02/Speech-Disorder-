@@ -78,7 +78,7 @@ export function AnalyticsPage() {
           />
           <LiveTrendChart
             title="Loudness"
-            unit="dB"
+            unit="dBFS"
             color="var(--color-loudness)"
             domain={[-45, 0]}
             points={seriesFor(history, (f) => f.loudnessDb)}

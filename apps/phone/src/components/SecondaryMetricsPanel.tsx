@@ -1,24 +1,27 @@
 import { useState } from 'react';
 import type { MetricsFrame } from '../dsp/sessionPipeline';
+import { formatMetric, formatCount, formatPercent, NA } from '../lib/formatMetric';
 
 function Tile({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col items-center justify-center gap-0.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-2 py-2">
-      <span className="tabular-nums text-xs font-semibold text-[var(--color-ink)]">{value}</span>
+      <span className={`tabular-nums text-xs font-semibold ${value === NA ? 'text-[var(--color-ink-muted)]' : 'text-[var(--color-ink)]'}`}>{value}</span>
       <span className="text-center text-[9px] uppercase tracking-wide text-[var(--color-ink-muted)]">{label}</span>
     </div>
   );
 }
 
-const num = (v: number | null | undefined, digits = 2, unit = '') => (v == null ? '—' : `${v.toFixed(digits)}${unit}`);
-
 /**
  * Extra session diagnostics not covered by the 10 param cards (ParamGrid) —
  * decision audit (confidence/sample gate), trend, and cumulative counters.
  * Collapsed by default so the Main screen stays focused on the ring + the
- * 10 cards. Disfluency rate / repetition rate / false starts have no DSP
- * computation defined anywhere in the classification engine spec — shown
- * as "not available" rather than fabricated.
+ * 10 cards.
+ *
+ * Disfluency rate / repetition rate / false starts have no DSP computation
+ * anywhere in this app's pipeline -- there is no transcription/ASR stage,
+ * so per-word repetition or false-start detection genuinely cannot be
+ * computed from audio-only features. They are shown as N/A rather than a
+ * fabricated 0 or an unlabeled dash (Part 15/20).
  */
 export function SecondaryMetricsPanel({ frame }: { frame: MetricsFrame | null }) {
   const [open, setOpen] = useState(false);
@@ -36,18 +39,21 @@ export function SecondaryMetricsPanel({ frame }: { frame: MetricsFrame | null })
       </button>
       {open && (
         <div className="grid grid-cols-3 gap-2 border-t border-[var(--color-border)] p-3">
-          <Tile label="composite_z" value={num(frame?.compositeZ)} />
-          <Tile label="Confidence" value={frame?.confidence != null ? `${Math.round(frame.confidence * 100)}%` : '—'} />
-          <Tile label="Sample OK" value={frame?.sampleSufficient == null ? '—' : frame.sampleSufficient ? 'Yes' : 'No'} />
-          <Tile label="Rate Trend" value={num(frame?.rateTrend, 3)} />
-          <Tile label="Composite Score" value={num(frame?.compositeScore, 0)} />
-          <Tile label="Recovery Time" value={num(frame?.recoveryTimeSec, 1, ' s')} />
-          <Tile label="Words / 30s" value={num(frame?.wordsPerLast30Sec, 1)} />
-          <Tile label="Total Words" value={frame?.totalWordsSession != null ? Math.round(frame.totalWordsSession).toLocaleString() : '—'} />
-          <Tile label="Total Syllables" value={frame?.totalSyllablesSession != null ? frame.totalSyllablesSession.toLocaleString() : '—'} />
-          <Tile label="Disfluency Rate" value="—" />
-          <Tile label="Repetition Rate" value="—" />
-          <Tile label="False Starts" value="—" />
+          <Tile label="composite_z" value={formatMetric(frame?.compositeZ)} />
+          <Tile label="Confidence" value={formatPercent(frame ? frame.confidence * 100 : null)} />
+          <Tile label="Sample OK" value={frame?.sampleSufficient == null ? NA : frame.sampleSufficient ? 'Yes' : 'No'} />
+          <Tile label="Rate Trend" value={formatMetric(frame?.rateTrend, 3)} />
+          <Tile label="Composite Score" value={formatMetric(frame?.compositeScore, 0)} />
+          <Tile label="Recovery Time" value={formatMetric(frame?.recoveryTimeSec, 1, ' s')} />
+          <Tile label="Pause Count" value={formatCount(frame?.pauseCount)} />
+          <Tile label="IPU Count" value={formatCount(frame?.ipuCount)} />
+          <Tile label="Speaking Time" value={formatMetric(frame?.speakingDurationSec, 1, ' s')} />
+          <Tile label="Words / 30s" value={formatMetric(frame?.wordsPerLast30Sec, 1)} />
+          <Tile label="Total Words" value={formatCount(frame?.totalWordsSession)} />
+          <Tile label="Total Syllables" value={formatCount(frame?.totalSyllablesSession)} />
+          <Tile label="Disfluency Rate" value={NA} />
+          <Tile label="Repetition Rate" value={NA} />
+          <Tile label="False Starts" value={NA} />
         </div>
       )}
     </div>

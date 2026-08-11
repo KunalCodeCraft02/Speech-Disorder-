@@ -48,7 +48,7 @@ function NavPill({ to, label, disabled, accent }: { to: string; label: string; d
 export function LiveSessionPage() {
   const session = useSessionContext();
   const { profile: calibration } = useCalibrationProfile();
-  const pitchAlert = usePitchAlert(session.latest, calibration?.baselineMeanPitchHz);
+  const pitchAlert = usePitchAlert(session.latest);
 
   const [flashActive, setFlashActive] = useState(false);
   useEffect(() => {
@@ -75,7 +75,9 @@ export function LiveSessionPage() {
       style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))', paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
     >
       <header className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-sm font-semibold text-[var(--color-ink)]">Speech Biofeedback</h1>
+        <h1 className="bg-gradient-to-r from-[var(--color-ink)] to-[var(--color-accent-2)] bg-clip-text text-sm font-semibold text-transparent">
+          Speech Biofeedback
+        </h1>
         <div className="flex flex-wrap items-center gap-1.5">
           <NavPill to="/analytics" label="Analytics" disabled={false} accent />
           <NavPill to="/today" label="Today" disabled={isRecording} />

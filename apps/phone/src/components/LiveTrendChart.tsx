@@ -5,6 +5,8 @@
 // gradient-filled line over a dark surface, plus a baseline mean±1std band
 // (new here -- the old dashboard never had one) shaded behind the line.
 
+import { NA } from '../lib/formatMetric';
+
 const WIDTH = 320;
 const HEIGHT = 120;
 const PAD_X = 8;
@@ -39,7 +41,7 @@ export function LiveTrendChart({
   baselineStd?: number | null;
   formatValue?: (v: number) => string;
 }) {
-  const usable = points.filter((p) => p.value != null) as Array<{ ts: number; value: number }>;
+  const usable = points.filter((p) => p.value != null && Number.isFinite(p.value)) as Array<{ ts: number; value: number }>;
   const fmt = formatValue ?? ((v: number) => v.toFixed(1));
   const lastValue = usable.length ? usable[usable.length - 1].value : null;
 
@@ -88,7 +90,7 @@ export function LiveTrendChart({
       <div className="mb-1 flex items-baseline justify-between">
         <span className="text-xs font-semibold text-[var(--color-ink-secondary)]">{title}</span>
         <span className="tabular-nums text-sm font-semibold" style={{ color }}>
-          {lastValue != null ? fmt(lastValue) : '—'}
+          {lastValue != null ? fmt(lastValue) : NA}
           {unit && <span className="ml-0.5 text-[10px] font-normal text-[var(--color-ink-muted)]">{unit}</span>}
         </span>
       </div>

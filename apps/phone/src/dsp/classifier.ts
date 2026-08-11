@@ -53,16 +53,25 @@ export class HysteresisClassifier {
   private readonly settings: Settings;
   private readonly requiredWindows: number;
   private readonly refractorySec: number;
+  private readonly sustainSec: number;
+  private readonly smoothingAlpha: number;
 
   private confirmed: Classification = 'normal';
   private rawCounters: Record<Classification, number> = { uncalibrated: 0, normal: 0, tachylalia: 0 };
   private lastFeedbackTime: number | null = null;
   private lastConfidence = 0;
 
+  /** EMA of compositeZ (Part 17/1): a single fast/loud burst inside an otherwise normal window shouldn't be able to cross zTachylalia on its own -- only a sustained elevation should. */
+  private smoothedCompositeZ: number | null = null;
+  private rawStreakLabel: Classification | null = null;
+  private rawStreakStartTime: number | null = null;
+
   constructor(settings: Settings, requiredWindows?: number, refractorySec?: number) {
     this.settings = settings;
     this.requiredWindows = Math.max(1, requiredWindows ?? settings.hysteresisWindows);
     this.refractorySec = refractorySec ?? settings.feedbackRefractorySec;
+    this.sustainSec = Math.max(0, settings.hysteresisSustainSec);
+    this.smoothingAlpha = Math.min(1, Math.max(0, settings.compositeZSmoothingAlpha));
   }
 
   update(args: {
@@ -178,35 +187,56 @@ export class HysteresisClassifier {
         zRate,
         zPause,
         zSyll,
-        compositeZ,
+        // Report the last smoothed reading rather than this (unreliable,
+        // low-sample) window's raw compositeZ, so the displayed value
+        // doesn't jump around during a low-phonation window.
+        compositeZ: this.smoothedCompositeZ ?? compositeZ,
         ...displayZs,
         sampleSufficient: false,
       };
     }
 
+    // Smooth compositeZ (EMA) before it's used for the decision -- only on
+    // sample-sufficient windows, since a low-syllable window's compositeZ
+    // is itself a noisy estimate not worth folding in.
+    this.smoothedCompositeZ = this.smoothedCompositeZ === null ? compositeZ : this.smoothedCompositeZ + this.smoothingAlpha * (compositeZ - this.smoothedCompositeZ);
+    const smoothedCompositeZ = this.smoothedCompositeZ;
+
     // --- Step 1: raw label ---
     let raw: Classification;
     if (baseline.isPersonal) {
-      raw = compositeZ > settings.zTachylalia ? 'tachylalia' : 'normal';
+      raw = smoothedCompositeZ > settings.zTachylalia ? 'tachylalia' : 'normal';
     } else {
       raw = articulationRate > baseline.tachylaliaThreshold ? 'tachylalia' : 'normal';
     }
 
     // --- Step 2: hysteresis confirmation ---
+    // Two independent guards against flapping: `requiredWindows` consecutive
+    // same-raw emits (as before), AND the raw label must have held
+    // continuously for `sustainSec` of real recording time -- emits fire
+    // every ~0.5s, so a pure emit-count floor alone confirms a state change
+    // in as little as ~1.5s, too fast to read as "sustained."
     (Object.keys(this.rawCounters) as Classification[]).forEach((label) => {
       this.rawCounters[label] = label === raw ? this.rawCounters[label] + 1 : 0;
     });
 
-    const progress = Math.min(1, this.rawCounters[raw] / this.requiredWindows);
+    if (this.rawStreakLabel !== raw) {
+      this.rawStreakLabel = raw;
+      this.rawStreakStartTime = currentTime;
+    }
+    const sustainedSec = this.rawStreakStartTime !== null ? currentTime - this.rawStreakStartTime : 0;
+
+    const progress = Math.min(1, Math.min(this.rawCounters[raw] / this.requiredWindows, this.sustainSec > 0 ? sustainedSec / this.sustainSec : 1));
 
     let edge = false;
-    if (this.rawCounters[raw] >= this.requiredWindows && this.confirmed !== raw) {
+    if (this.rawCounters[raw] >= this.requiredWindows && sustainedSec >= this.sustainSec && this.confirmed !== raw) {
       this.confirmed = raw;
       edge = true;
     }
 
-    // --- Step 3: confidence ---
-    const direction = raw === 'tachylalia' ? 1 : compositeZ >= 0 ? 1 : -1;
+    // --- Step 3: confidence --- (uses the smoothed composite so one noisy
+    // window can't also swing confidence, matching the decision above)
+    const direction = raw === 'tachylalia' ? 1 : smoothedCompositeZ >= 0 ? 1 : -1;
     const components = [zRate, zPause, zSyll];
     const agreeing = components.filter((z) => z * direction > 0).length;
     const corroboration = agreeing / 3;
@@ -219,7 +249,7 @@ export class HysteresisClassifier {
         0,
         C.CONFIDENCE_WEIGHT_PROGRESS * progress +
           C.CONFIDENCE_WEIGHT_CORROBORATION * corroboration +
-          C.CONFIDENCE_WEIGHT_COMPOSITE_Z * Math.min(1, Math.abs(compositeZ) / C.CONFIDENCE_COMPOSITE_Z_SCALE) +
+          C.CONFIDENCE_WEIGHT_COMPOSITE_Z * Math.min(1, Math.abs(smoothedCompositeZ) / C.CONFIDENCE_COMPOSITE_Z_SCALE) +
           C.CONFIDENCE_WEIGHT_SAMPLE * sampleFactor
       )
     );
@@ -248,7 +278,7 @@ export class HysteresisClassifier {
       zRate,
       zPause,
       zSyll,
-      compositeZ,
+      compositeZ: smoothedCompositeZ,
       ...displayZs,
       sampleSufficient: true,
     };

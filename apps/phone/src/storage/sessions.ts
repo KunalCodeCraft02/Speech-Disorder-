@@ -17,6 +17,16 @@ export interface SessionSummary {
   feedbackTriggerCount: number;
   /** The patient's calibrated baseline rate at the time of this session, for later "closer/further from baseline" comparisons. */
   baselineArticulationRateAtSession: number | null;
+
+  // Final, whole-session aggregate stats (SessionPipeline.buildSummary()) --
+  // distinct from avgArticulationRateSPS above, which is a simple running
+  // mean of the live per-frame rate. These are computed once, at stop time,
+  // from the complete accumulated session state rather than any single
+  // frame (Part 19: real-time vs. final analysis).
+  finalVoiceActivityPercent: number | null;
+  finalCompositeScore: number | null;
+  totalSyllables: number | null;
+  totalPauses: number | null;
 }
 
 /** Local calendar date key (not UTC) — a session that runs past midnight is tagged by when it started. */

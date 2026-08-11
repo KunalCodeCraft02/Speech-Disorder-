@@ -1,23 +1,29 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MetricsFrame } from '../dsp/sessionPipeline';
-import { toneAlertHaptic } from '../lib/haptics';
-
-// Independent of FEEDBACK_REFRACTORY_SEC (the main alert's 4.0s cooldown) --
-// this is its own 6.0s cooldown so the two can never spam simultaneously,
-// and toneAlertHaptic() never shares a call site with mainAlertHaptic().
-const PITCH_ALERT_COOLDOWN_MS = 6000;
-const TOAST_VISIBLE_MS = 4000;
+import { settings } from '../dsp/config';
 
 /**
- * A general prosody cue, independent of the main tachylalia vibration
- * trigger. Fires when the patient's mean pitch is both rising
- * (meanPitchTrendHz > 0) and above 1.15x their calibrated baseline, for 2+
- * consecutive windows.
+ * Tone/pitch prosody cue -- toast only, and must never vibrate the device
+ * (Part 3): this hook has no dependency on lib/haptics.ts at all, so there
+ * is no shared call site for a pitch condition to trigger the tachylalia
+ * alert's vibration through.
+ *
+ * Fires only on a meaningful, sustained pitch deviation above the
+ * patient's own calibrated baseline -- not on every small natural
+ * fluctuation. Reuses the classifier's zPitch (already normalized by the
+ * patient's personal pitch std, with a floor -- see classifier.ts), which
+ * is both what makes the tolerance personalized and what lets this hook
+ * stay a thin presentation-layer consumer instead of re-deriving pitch
+ * math of its own (Part 22). zPitch is EMA-smoothed here, and the
+ * deviation must hold continuously for `toneAlertSustainSec` (real
+ * session time, not frame count) before it counts as "sustained" rather
+ * than a temporary wobble.
  */
-export function usePitchAlert(frame: MetricsFrame | null, baselinePitchHz: number | null | undefined) {
+export function usePitchAlert(frame: MetricsFrame | null) {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const consecutiveRef = useRef(0);
-  const lastFiredAtRef = useRef(0);
+  const smoothedZRef = useRef<number | null>(null);
+  const sustainStartSecRef = useRef<number | null>(null);
+  const lastFiredAtSecRef = useRef<number>(-Infinity);
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const dismiss = useCallback(() => {
@@ -29,31 +35,43 @@ export function usePitchAlert(frame: MetricsFrame | null, baselinePitchHz: numbe
   }, []);
 
   useEffect(() => {
-    if (!frame || baselinePitchHz == null) return;
-    const { meanPitchHz, meanPitchTrendHz } = frame;
-    if (meanPitchHz == null || meanPitchTrendHz == null) return;
+    if (!frame || frame.classification === 'uncalibrated') {
+      // No personal baseline yet (or session ended) -- nothing to compare
+      // against, and stale smoothing/sustain state from a prior session
+      // must not leak into the next one.
+      smoothedZRef.current = null;
+      sustainStartSecRef.current = null;
+      return;
+    }
 
-    const threshold = baselinePitchHz * 1.15;
-    const exceeds = meanPitchTrendHz > 0 && meanPitchHz > threshold;
-    consecutiveRef.current = exceeds ? consecutiveRef.current + 1 : 0;
+    const alpha = settings.toneAlertSmoothingAlpha;
+    smoothedZRef.current = smoothedZRef.current === null ? frame.zPitch : smoothedZRef.current + alpha * (frame.zPitch - smoothedZRef.current);
+    const smoothedZ = smoothedZRef.current;
 
-    if (consecutiveRef.current < 2) return;
+    const exceeds = smoothedZ > settings.toneAlertZThreshold;
+    if (!exceeds) {
+      sustainStartSecRef.current = null;
+      return;
+    }
+    if (sustainStartSecRef.current === null) sustainStartSecRef.current = frame.elapsedSec;
 
-    const now = Date.now();
-    if (now - lastFiredAtRef.current < PITCH_ALERT_COOLDOWN_MS) return;
+    const sustainedSec = frame.elapsedSec - sustainStartSecRef.current;
+    if (sustainedSec < settings.toneAlertSustainSec) return;
+    if (frame.elapsedSec - lastFiredAtSecRef.current < settings.toneAlertCooldownSec) return;
 
-    lastFiredAtRef.current = now;
+    lastFiredAtSecRef.current = frame.elapsedSec;
     setToastMessage('Try lowering your tone');
-    void toneAlertHaptic();
 
     if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
-    dismissTimerRef.current = setTimeout(() => setToastMessage(null), TOAST_VISIBLE_MS);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frame, baselinePitchHz]);
+    dismissTimerRef.current = setTimeout(() => setToastMessage(null), settings.toneAlertToastVisibleSec * 1000);
+  }, [frame]);
 
-  useEffect(() => () => {
-    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+    },
+    []
+  );
 
   return { toastMessage, dismiss };
 }

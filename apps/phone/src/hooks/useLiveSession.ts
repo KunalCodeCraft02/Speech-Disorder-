@@ -114,6 +114,10 @@ export function useLiveSession() {
     if (pipeline) {
       const durationSec = pipeline.elapsedSec;
       const startedAt = sessionStartedAtRef.current ?? new Date().toISOString();
+      // Final aggregate stats, computed once from the complete accumulated
+      // session state (not a snapshot of the last live frame) -- see
+      // SessionPipeline.buildSummary()'s doc comment.
+      const finalSummary = pipeline.buildSummary();
       const summary: SessionSummary = {
         id: pipeline.sessionId,
         dateKey: dateKeyFor(new Date(startedAt)),
@@ -124,6 +128,10 @@ export function useLiveSession() {
         timeInTachylaliaSec: tachylaliaAccumSecRef.current,
         feedbackTriggerCount: feedbackCountRef.current,
         baselineArticulationRateAtSession: baselineRateRef.current,
+        finalVoiceActivityPercent: finalSummary.finalMetrics.voiceActivityPercent,
+        finalCompositeScore: finalSummary.finalMetrics.compositeScore,
+        totalSyllables: finalSummary.totalSyllables,
+        totalPauses: finalSummary.totalPauses,
       };
       // Fire-and-forget: a slow IndexedDB write must not block the UI from
       // returning to idle.

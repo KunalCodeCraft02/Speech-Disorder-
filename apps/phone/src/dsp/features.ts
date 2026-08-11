@@ -16,8 +16,12 @@ export interface FeatureSet {
   interSyllableIntervalSec: number | null;
   pauseDurationSec: number | null;
   pauseFrequencyPerMin: number;
+  pauseCount: number;
   speechToPauseRatio: number | null;
   interPausalUnitLengthSec: number | null;
+  ipuCount: number;
+  /** Cumulative time (sec) classified as speech so far this session/clip -- distinct from elapsedSec, which also counts silence/pauses. */
+  speakingDurationSec: number;
   meanPitchHz: number | null;
   pitchVariabilityHz: number | null;
   loudnessDb: number;
@@ -130,6 +134,7 @@ export class RunningStats {
     return total;
   }
 
+  /** Relative dBFS-style frame energy (0 dBFS = digital full scale, so all real readings are negative) from the VAD's own energy estimate -- not a calibrated microphone-relative SPL measurement (Part 13). Averaged over recentFrameDecisions (already windowed), so a single loud/quiet frame doesn't move the displayed value on its own. */
   windowedLoudnessDb(): number {
     const speechEnergies = this.recentFrameDecisions.filter((d) => d.isSpeech).map((d) => d.energyDb);
     if (speechEnergies.length) return mean(speechEnergies);
@@ -253,16 +258,32 @@ export function computeFeatureSet(
 
   const composite = compositeScore(articulationRate, baseline.baselineArticulationRate, consistency, voiceActivityPct / 100);
 
+  // Pause duration: 0 completed pauses is a real "no pauses" finding once
+  // enough time has elapsed to expect one, not missing data -- only the
+  // first couple of seconds are genuinely "not enough data yet" (N/A).
+  const pauseDurationSec = stats.totalPauseCount > 0 ? stats.meanPauseSec() : elapsedSec >= C.MIN_ELAPSED_FOR_ZERO_METRIC_SEC ? 0 : null;
+
+  // IPU length: fold the still-open speech segment in as a live sample so
+  // one continuous run of speech (no completed IPU yet) still produces a
+  // value instead of a blank one, and so the average tracks the segment
+  // actually in progress rather than lagging a full pause behind.
+  const openSpeechDuration = openKind === 'speech' ? openDuration : 0;
+  const interPausalUnitLengthSec =
+    openSpeechDuration > C.EPS ? (stats.totalIpuSec + openSpeechDuration) / (stats.totalIpuCount + 1) : stats.meanIpuSec();
+
   return {
     elapsedSec,
     articulationRateSPS: articulationRate,
     speechRateWPM: speechRateWpm,
     averageSyllableDurationSec: averageSyllableDuration,
     interSyllableIntervalSec: stats.meanIsi(),
-    pauseDurationSec: stats.meanPauseSec(),
+    pauseDurationSec,
     pauseFrequencyPerMin: stats.pauseFrequencyPerMin(elapsedSec),
+    pauseCount: stats.totalPauseCount,
     speechToPauseRatio: stats.speechToPauseRatio(openKind, openDuration),
-    interPausalUnitLengthSec: stats.meanIpuSec(),
+    interPausalUnitLengthSec,
+    ipuCount: stats.totalIpuCount + (openSpeechDuration > C.EPS ? 1 : 0),
+    speakingDurationSec: stats.totalIpuSec + openSpeechDuration,
     meanPitchHz: meanPitch,
     pitchVariabilityHz: pitchVariability,
     loudnessDb: stats.windowedLoudnessDb(),

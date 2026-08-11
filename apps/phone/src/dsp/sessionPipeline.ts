@@ -57,8 +57,11 @@ export interface MetricsFrame {
   interSyllableIntervalSec: number | null;
   pauseDurationSec: number | null;
   pauseFrequencyPerMin: number;
+  pauseCount: number;
   speechToPauseRatio: number | null;
   interPausalUnitLengthSec: number | null;
+  ipuCount: number;
+  speakingDurationSec: number;
   meanPitchHz: number | null;
   pitchVariabilityHz: number | null;
   loudnessDb: number;
@@ -84,8 +87,11 @@ function featureSetFields(f: FeatureSet) {
     interSyllableIntervalSec: roundOrNull(f.interSyllableIntervalSec, 4),
     pauseDurationSec: roundOrNull(f.pauseDurationSec, 3),
     pauseFrequencyPerMin: round(f.pauseFrequencyPerMin, 2),
+    pauseCount: f.pauseCount,
     speechToPauseRatio: roundOrNull(f.speechToPauseRatio, 3),
     interPausalUnitLengthSec: roundOrNull(f.interPausalUnitLengthSec, 3),
+    ipuCount: f.ipuCount,
+    speakingDurationSec: round(f.speakingDurationSec, 2),
     meanPitchHz: roundOrNull(f.meanPitchHz, 1),
     pitchVariabilityHz: roundOrNull(f.pitchVariabilityHz, 2),
     loudnessDb: round(f.loudnessDb, 2),

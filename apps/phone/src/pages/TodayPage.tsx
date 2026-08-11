@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { generateDailyInsight, getDailySummary, type DailySummary } from '../storage/insights';
+import { formatMetric } from '../lib/formatMetric';
 
 function Stat({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
@@ -89,9 +90,7 @@ export function TodayPage() {
                       {new Date(s.startedAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
                     </span>
                     <span className="tabular-nums text-sm font-semibold text-[var(--color-ink)]">{formatMinutes(s.durationSec)} min</span>
-                    <span className="tabular-nums text-sm text-[var(--color-ink-muted)]">
-                      {s.avgArticulationRateSPS != null ? `${s.avgArticulationRateSPS.toFixed(2)} syll/s` : '—'}
-                    </span>
+                    <span className="tabular-nums text-sm text-[var(--color-ink-muted)]">{formatMetric(s.avgArticulationRateSPS, 2, ' syll/s')}</span>
                   </div>
                 ))}
               </div>
