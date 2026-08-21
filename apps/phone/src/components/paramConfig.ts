@@ -5,12 +5,13 @@
 // drive compositeZ/TACHYLALIA so a red card on a `feedsComposite: false`
 // param is legible as "unusual, not a trigger."
 import type { MetricsFrame } from '../dsp/sessionPipeline';
+import * as C from '../dsp/constants';
 
 export type ParamKey =
   | 'rate'
   | 'pause'
-  | 'syll'
-  | 'isi'
+  | 'wpm'
+  | 'words30'
   | 'pauseDuration'
   | 'pauseFrequency'
   | 'ipuLength'
@@ -27,6 +28,8 @@ export interface ParamDef {
   feedsComposite: boolean;
   value: (f: MetricsFrame) => number | null;
   z: (f: MetricsFrame) => number;
+  /** Optional override: Words/30s (Part H) is colored against the fixed population reference range (constants.ts), not a personal-baseline z-score -- when present, this replaces the default tierForZ(z, ...) for this card. */
+  tier?: (f: MetricsFrame) => Tier;
 }
 
 export const PARAMS: ParamDef[] = [
@@ -51,24 +54,40 @@ export const PARAMS: ParamDef[] = [
     z: (f) => f.zPause,
   },
   {
-    key: 'syll',
-    label: 'Syllable Duration',
-    shortLabel: 'Syll. Duration',
-    unit: 's',
-    digits: 3,
-    feedsComposite: true,
-    value: (f) => f.averageSyllableDurationSec,
-    z: (f) => f.zSyll,
+    // Live WPM (Part H) -- same underlying signal as Articulation Rate in
+    // different units, so it reuses zRate for its color tier rather than
+    // inventing a second baseline for what is effectively the same
+    // measurement expressed as words/min. feedsComposite is still false
+    // here: compositeZ is computed from articulationRateSPS, not this
+    // derived value.
+    key: 'wpm',
+    label: 'Speech Rate (WPM)',
+    shortLabel: 'WPM',
+    unit: 'wpm',
+    digits: 0,
+    feedsComposite: false,
+    value: (f) => f.speechRateWPM,
+    z: (f) => f.zRate,
   },
   {
-    key: 'isi',
-    label: 'Inter-Syllable Interval',
-    shortLabel: 'Inter-Syll.',
-    unit: 's',
-    digits: 3,
+    // Part H/D: a live population-reference metric -- also condition_2's
+    // raw trigger input in classifier.ts (wordsPerLast30Sec > the normal
+    // range's upper bound). Colored against the fixed population range,
+    // not a personal z-score -- see `tier` below.
+    key: 'words30',
+    label: 'Words / 30 sec',
+    shortLabel: 'Words/30s',
+    unit: '',
+    digits: 0,
     feedsComposite: false,
-    value: (f) => f.interSyllableIntervalSec,
-    z: (f) => f.zInterSyllableInterval,
+    value: (f) => f.wordsPerLast30Sec,
+    z: () => 0,
+    tier: (f) => {
+      const value = f.wordsPerLast30Sec;
+      if (value > C.WORDS_PER_30SEC_NORMAL_MAX) return 'abnormal';
+      if (value < C.WORDS_PER_30SEC_NORMAL_MIN) return 'elevated';
+      return 'normal';
+    },
   },
   {
     key: 'pauseDuration',

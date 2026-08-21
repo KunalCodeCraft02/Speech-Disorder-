@@ -29,6 +29,11 @@ export interface Settings {
   toneAlertCooldownSec: number;
   toneAlertToastVisibleSec: number;
 
+  /** Loudness alert (Part G): fixed absolute threshold (not personal-baseline-relative), how long it must stay sustained during actual VAD-confirmed speech before it fires, and its own cooldown -- independent of both the tone alert's and the main tachylalia alert's cooldowns. */
+  loudnessAlertSustainSec: number;
+  loudnessAlertCooldownSec: number;
+  loudnessAlertToastVisibleSec: number;
+
   // Population defaults — used only if a caller explicitly opts into a
   // demo/no-calibration baseline. There is no "demoMode" fallback wired
   // into the live app anymore (single real user, calibration is always
@@ -89,17 +94,23 @@ export const settings: Settings = {
   // compositeZ's weighted threshold at zTachylalia/weight sigma for that
   // feature alone (e.g. rate-only at weight 0.6 needed ~3.3 sigma at the
   // original zTachylalia=2.0 -- an unrealistically extreme, sustained rate
-  // increase). Lowered to 1.4, then to 1.1: speechToPauseRatio used to be
-  // a session-cumulative ratio that could drift and inflate z_pause on its
-  // own (see features.ts's windowedPauseSec), which was quietly helping
-  // borderline-fast speech cross 1.4; now that z_pause is properly
-  // windowed and no longer contributes that spurious lift, 1.4 required
-  // near-extreme, unnaturally fast speech to trigger. 1.1 (rate-only now
-  // needs ~1.8 sigma alone) is reachable by a real, moderately-fast,
-  // sustained reading without going back to flagging everyday variation --
-  // hysteresisWindows/hysteresisSustainSec/compositeZSmoothingAlpha are
-  // unchanged, so a single fast burst still can't trigger on its own.
-  zTachylalia: 1.1,
+  // increase). Progressively lowered (2.0 -> 1.4 -> 1.1 -> 1.0) to sit
+  // closer to the patient's own calibrated baseline: speechToPauseRatio
+  // used to be a session-cumulative ratio that could drift and inflate
+  // z_pause on its own (see features.ts's windowedPauseSec), which was
+  // quietly helping borderline-fast speech cross the higher thresholds; now
+  // that z_pause is properly windowed and no longer contributes that
+  // spurious lift, 1.0 (rate-only now needs ~1.7 sigma alone) is reachable
+  // by a real, moderately-fast, sustained reading without going back to
+  // flagging everyday variation -- hysteresisWindows/hysteresisSustainSec/
+  // compositeZSmoothingAlpha are unchanged, so a single fast burst still
+  // can't trigger on its own via condition_1. (condition_2 in
+  // classifier.ts -- wordsPerLast30Sec > the population upper bound -- is
+  // an independent, non-z-score trigger; see constants.ts's
+  // WORDS_PER_30SEC_TACHYLALIA_THRESHOLD.) Tunable: change this constant to
+  // retune sensitivity, and validate against real session data before
+  // treating a new value as final.
+  zTachylalia: 1.0,
   baselineStdFloor: 0.15,
 
   // |zPitch| already divides by the patient's own calibrated pitch std
@@ -112,6 +123,10 @@ export const settings: Settings = {
   // so the two can never spam simultaneously or be mistaken for one another.
   toneAlertCooldownSec: 6.0,
   toneAlertToastVisibleSec: 4.0,
+
+  loudnessAlertSustainSec: 3.0,
+  loudnessAlertCooldownSec: 6.0,
+  loudnessAlertToastVisibleSec: 4.0,
 
   defaultBaselineArticulationRate: 4.4,
   defaultBaselineArticulationRateStd: 0.6,

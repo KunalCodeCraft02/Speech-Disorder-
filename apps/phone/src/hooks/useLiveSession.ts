@@ -8,6 +8,7 @@ import { describeMicErrorVerbose } from '../lib/micStream';
 import { getCalibration } from '../storage/calibration';
 import { dateKeyFor, saveSession, type SessionSummary } from '../storage/sessions';
 import { useCurrentUser } from '../context/CurrentUserContext';
+import { useHeadsetAudioContext } from '../context/HeadsetAudioContext';
 import { useAudioCapture } from './useAudioCapture';
 
 export type RecordingState = 'idle' | 'requesting-permission' | 'recording' | 'stopping' | 'error';
@@ -25,6 +26,7 @@ function newSessionId(): string {
  */
 export function useLiveSession() {
   const { userId } = useCurrentUser();
+  const headset = useHeadsetAudioContext();
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const [latest, setLatest] = useState<MetricsFrame | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -70,6 +72,10 @@ export function useLiveSession() {
 
   const startRecording = useCallback(async () => {
     if (recordingState === 'recording' || recordingState === 'requesting-permission') return;
+    // Defense-in-depth: the Start button is unreachable while the
+    // headset gate (App.tsx's HeadsetGate) is blocking the routes, but
+    // guard here too in case a stale render slips through.
+    if (!headset.connected) return;
 
     setErrorMessage(null);
     setRecordingState('requesting-permission');
@@ -105,7 +111,7 @@ export function useLiveSession() {
     rateAccumRef.current = { sum: 0, count: 0 };
     setLatest(null);
     setRecordingState('recording');
-  }, [capture, recordingState, userId]);
+  }, [headset.connected, capture, recordingState, userId]);
 
   const stopRecording = useCallback(() => {
     if (recordingState !== 'recording') return;
@@ -144,6 +150,15 @@ export function useLiveSession() {
     sessionStartedAtRef.current = null;
     setRecordingState('idle');
   }, [capture, recordingState]);
+
+  // Part J: the headset disconnecting mid-session must stop the session
+  // immediately, not just block the *next* Start -- App.tsx's HeadsetGate
+  // re-shows the connect prompt on the same `connected` flag once this
+  // fires, so the two together satisfy "stop the session and re-show the
+  // connect prompt."
+  useEffect(() => {
+    if (!headset.connected && recordingState === 'recording') stopRecording();
+  }, [headset.connected, recordingState, stopRecording]);
 
   // `capture` (useAudioCapture's return value) is a new object every
   // render, but `capture.stop` itself is a stable useCallback. Depending

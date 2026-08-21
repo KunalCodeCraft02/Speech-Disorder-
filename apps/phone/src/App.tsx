@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { LiveSessionPage } from './pages/LiveSessionPage';
 import { CalibrationPage } from './pages/CalibrationPage';
@@ -7,7 +7,16 @@ import { AnalyticsPage } from './pages/AnalyticsPage';
 import { OnboardingFlow } from './pages/OnboardingFlow';
 import { SessionProvider } from './context/SessionContext';
 import { CurrentUserProvider } from './context/CurrentUserContext';
+import { HeadsetAudioProvider, useHeadsetAudioContext } from './context/HeadsetAudioContext';
+import { HeadsetGatePrompt } from './components/HeadsetGatePrompt';
 import { getDeviceState, saveDeviceState, type DeviceState } from './storage/device';
+
+/** Reads the shared headset status (Part J) and blocks the app's routes entirely until a mic-capable headset is connected -- mounted inside SessionProvider so useLiveSession's own disconnect-mid-session handling keeps running underneath the prompt. */
+function HeadsetGate({ children }: { children: ReactNode }) {
+  const { connected, checking, recheck } = useHeadsetAudioContext();
+  if (!connected) return <HeadsetGatePrompt checking={checking} onRecheck={recheck} />;
+  return <>{children}</>;
+}
 
 // Multiple local profiles can exist on one device (see storage/users.ts),
 // each with their own calibration -- but at most one is signed in at a
@@ -43,15 +52,19 @@ export default function App() {
 
   return (
     <CurrentUserProvider userId={device.currentUserId} logout={logout}>
-      <SessionProvider>
-        <Routes>
-          <Route path="/" element={<LiveSessionPage />} />
-          <Route path="/analytics" element={<AnalyticsPage />} />
-          <Route path="/calibrate" element={<CalibrationPage />} />
-          <Route path="/today" element={<TodayPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </SessionProvider>
+      <HeadsetAudioProvider>
+        <SessionProvider>
+          <HeadsetGate>
+            <Routes>
+              <Route path="/" element={<LiveSessionPage />} />
+              <Route path="/analytics" element={<AnalyticsPage />} />
+              <Route path="/calibrate" element={<CalibrationPage />} />
+              <Route path="/today" element={<TodayPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </HeadsetGate>
+        </SessionProvider>
+      </HeadsetAudioProvider>
     </CurrentUserProvider>
   );
 }

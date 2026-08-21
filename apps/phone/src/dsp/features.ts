@@ -24,7 +24,7 @@ export interface FeatureSet {
   speakingDurationSec: number;
   meanPitchHz: number | null;
   pitchVariabilityHz: number | null;
-  loudnessDb: number;
+  loudnessDb: number | null;
   voiceActivityPercent: number;
   speechConsistency: number;
   compositeScore: number;
@@ -42,6 +42,11 @@ function std(values: number[]): number {
   if (values.length < 2) return 0;
   const m = mean(values);
   return Math.sqrt(values.reduce((a, b) => a + (b - m) ** 2, 0) / values.length);
+}
+
+/** Part C sanity-bound check: a value outside a param's physiologically-possible range is invalid for that window, never clamped-and-displayed. */
+function withinBounds(value: number, min: number, max: number): boolean {
+  return Number.isFinite(value) && value >= min && value <= max;
 }
 
 /** O(1)-memory accumulator for one session (deques trimmed to the rolling analysis window; `recentNucleiTimes30s` trimmed to a fixed 30s instead, for wordsPerLast30Sec). */
@@ -148,12 +153,25 @@ export class RunningStats {
     return total;
   }
 
-  /** Relative dBFS-style frame energy (0 dBFS = digital full scale, so all real readings are negative) from the VAD's own energy estimate -- not a calibrated microphone-relative SPL measurement (Part 13). Averaged over recentFrameDecisions (already windowed), so a single loud/quiet frame doesn't move the displayed value on its own. */
-  windowedLoudnessDb(): number {
+  /**
+   * Relative dBFS-style frame energy (0 dBFS = digital full scale, so all
+   * real readings are negative) from the VAD's own energy estimate -- not a
+   * calibrated microphone-relative SPL measurement (Part 13). Averaged over
+   * recentFrameDecisions (already windowed), so a single loud/quiet frame
+   * doesn't move the displayed value on its own.
+   *
+   * VAD-gated (Part A): null when this window has no VAD-confirmed speech
+   * frames at all, rather than falling back to the mean of non-speech
+   * frames (background noise floor) or a hardcoded -60 -- either fallback
+   * would report a "loudness" reading that isn't actually the patient
+   * speaking, which could also spuriously feed the loudness alert (Part G)
+   * during silence. The caller (sessionPipeline.ts) holds the last valid
+   * reading forward when this is null, rather than displaying/alerting on
+   * a null.
+   */
+  windowedLoudnessDb(): number | null {
     const speechEnergies = this.recentFrameDecisions.filter((d) => d.isSpeech).map((d) => d.energyDb);
-    if (speechEnergies.length) return mean(speechEnergies);
-    const allEnergies = this.recentFrameDecisions.map((d) => d.energyDb);
-    return allEnergies.length ? mean(allEnergies) : -60.0;
+    return speechEnergies.length ? mean(speechEnergies) : null;
   }
 
   windowedLoudnessStdDb(): number {
@@ -267,18 +285,44 @@ export function computeFeatureSet(
   const windowedNuclei = stats.windowedNucleiCount();
   const windowedPhonation = stats.windowedPhonationSec(windowStart, windowEnd, openKind, openStart, openEnd);
 
-  const articulationRate = windowedPhonation > C.EPS ? windowedNuclei / windowedPhonation : 0;
+  // Part C: a near-zero (but nonzero) phonation denominator produced
+  // absurd spikes (e.g. 1 syllable / 0.001s phonation = 1000 syll/s) --
+  // MIN_LIVE_PHONATION_SEC (well above the old C.EPS floor) is the real
+  // fix; ARTICULATION_RATE_MAX_SPS below is the safety-net backstop in
+  // case some other path still produces an implausible value.
+  const rawArticulationRate = windowedPhonation > C.MIN_LIVE_PHONATION_SEC ? windowedNuclei / windowedPhonation : 0;
+  const articulationRate = withinBounds(rawArticulationRate, 0, C.ARTICULATION_RATE_MAX_SPS) ? rawArticulationRate : 0;
   const speechRateSps = effectiveWindow > C.EPS ? windowedNuclei / effectiveWindow : 0;
   const speechRateWpm = (speechRateSps * 60) / C.SYLLABLES_PER_WORD;
 
-  const averageSyllableDuration = windowedNuclei > 0 ? windowedPhonation / windowedNuclei : null;
+  const rawAverageSyllableDuration = windowedNuclei > 0 ? windowedPhonation / windowedNuclei : null;
+  const averageSyllableDuration =
+    rawAverageSyllableDuration !== null && withinBounds(rawAverageSyllableDuration, C.SYLLABLE_DURATION_MIN_SEC, C.SYLLABLE_DURATION_MAX_SEC)
+      ? rawAverageSyllableDuration
+      : null;
+
+  const rawInterSyllableIntervalSec = stats.meanIsi();
+  const interSyllableIntervalSec =
+    rawInterSyllableIntervalSec !== null &&
+    withinBounds(rawInterSyllableIntervalSec, C.INTER_SYLLABLE_INTERVAL_MIN_SEC, C.INTER_SYLLABLE_INTERVAL_MAX_SEC)
+      ? rawInterSyllableIntervalSec
+      : null;
 
   const voicedF0 = voicedF0Array(pitchFrames);
-  const meanPitch = voicedF0.length > 0 ? mean(Array.from(voicedF0)) : null;
+  const rawMeanPitch = voicedF0.length > 0 ? mean(Array.from(voicedF0)) : null;
+  // Safety-net only: pitch.ts's autocorrelation search already can't return
+  // f0Hz outside [PITCH_MIN_HZ, PITCH_MAX_HZ] by construction (the lag
+  // search range is derived from those same constants), but a "voiced"
+  // reading from a bug elsewhere in the chain must still never reach the UI.
+  const meanPitch = rawMeanPitch !== null && withinBounds(rawMeanPitch, C.PITCH_MIN_HZ, C.PITCH_MAX_HZ) ? rawMeanPitch : null;
   let pitchVariability: number | null;
-  if (voicedF0.length > 1) pitchVariability = std(Array.from(voicedF0));
-  else if (voicedF0.length === 1) pitchVariability = 0;
-  else pitchVariability = null;
+  if (meanPitch === null) pitchVariability = null;
+  else if (voicedF0.length > 1) pitchVariability = std(Array.from(voicedF0));
+  else pitchVariability = 0;
+
+  const rawLoudnessDb = stats.windowedLoudnessDb();
+  const loudnessDb =
+    rawLoudnessDb !== null && withinBounds(rawLoudnessDb, C.LOUDNESS_REALISTIC_MIN_DBFS, C.LOUDNESS_REALISTIC_MAX_DBFS) ? rawLoudnessDb : null;
 
   const consistency = consistencyFromCv(stats.isiCoefficientOfVariation());
   const voiceActivityPct = stats.voiceActivityPercent(openKind, openDuration, elapsedSec);
@@ -303,7 +347,7 @@ export function computeFeatureSet(
     articulationRateSPS: articulationRate,
     speechRateWPM: speechRateWpm,
     averageSyllableDurationSec: averageSyllableDuration,
-    interSyllableIntervalSec: stats.meanIsi(),
+    interSyllableIntervalSec,
     pauseDurationSec,
     pauseFrequencyPerMin: stats.pauseFrequencyPerMin(elapsedSec),
     pauseCount: stats.totalPauseCount,
@@ -313,7 +357,7 @@ export function computeFeatureSet(
     speakingDurationSec: stats.totalIpuSec + openSpeechDuration,
     meanPitchHz: meanPitch,
     pitchVariabilityHz: pitchVariability,
-    loudnessDb: stats.windowedLoudnessDb(),
+    loudnessDb,
     voiceActivityPercent: voiceActivityPct,
     speechConsistency: consistency,
     compositeScore: composite,

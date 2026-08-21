@@ -12,7 +12,7 @@
 // call into.
 
 import { Capacitor } from '@capacitor/core';
-import { Haptics } from '@capacitor/haptics';
+import { Haptics, NotificationType } from '@capacitor/haptics';
 
 // The alert must be clearly felt, not a quick tap -- a continuous buzz
 // comfortably over the 2s floor.
@@ -52,4 +52,25 @@ export async function mainAlertHaptic(): Promise<boolean> {
       inFlight = false;
     }, MAIN_ALERT_DURATION_MS);
   }
+}
+
+/**
+ * Loudness alert (Part G): a distinct, short native "notification" haptic
+ * (not the continuous tachylalia buzz) -- deliberately a different
+ * Capacitor Haptics call (`notification` vs. `vibrate`) so the two alerts
+ * are physically distinguishable on-device, matching their separate
+ * cooldowns (see useLoudnessAlert.ts). No `inFlight` guard here: unlike the
+ * main alert this is a brief, non-overlapping native effect, and the
+ * hook's own loudnessAlertCooldownSec already prevents rapid re-firing.
+ */
+export async function loudnessAlertHaptic(): Promise<boolean> {
+  if (Capacitor.isNativePlatform()) {
+    await Haptics.notification({ type: NotificationType.Warning });
+    return true;
+  }
+  if (VIBRATE_SUPPORTED) {
+    navigator.vibrate(200);
+    return true;
+  }
+  return false;
 }

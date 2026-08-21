@@ -44,6 +44,18 @@ export function usePitchAlert(frame: MetricsFrame | null) {
       return;
     }
 
+    if (!frame.livePhonationActive) {
+      // Part A: this window has (near-)zero VAD-confirmed phonation --
+      // meanPitchHz/zPitch are held at their last valid reading (see
+      // sessionPipeline.ts's applyLiveVadGate), which must not be allowed
+      // to silently accumulate "sustained" credit while the patient isn't
+      // actually speaking. Pause the sustain timer (don't reset the EMA --
+      // it should pick back up naturally once real speech resumes) and
+      // suppress firing for this window.
+      sustainStartSecRef.current = null;
+      return;
+    }
+
     const alpha = settings.toneAlertSmoothingAlpha;
     smoothedZRef.current = smoothedZRef.current === null ? frame.zPitch : smoothedZRef.current + alpha * (frame.zPitch - smoothedZRef.current);
     const smoothedZ = smoothedZRef.current;

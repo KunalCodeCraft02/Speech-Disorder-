@@ -64,6 +64,9 @@ export class HysteresisClassifier {
   private rawStreakLabel: Classification | null = null;
   private rawStreakStartTime: number | null = null;
 
+  /** Part F: last time the (now decoupled-from-hysteresis) Haptics alert fired, for the FEEDBACK_REFRACTORY_SEC repeat-while-abnormal cadence. Reset to null on any 'normal' window so the next abnormal onset fires immediately. */
+  private lastFeedbackFireTime: number | null = null;
+
   constructor(settings: Settings, requiredWindows?: number) {
     this.settings = settings;
     this.requiredWindows = Math.max(1, requiredWindows ?? settings.hysteresisWindows);
@@ -80,8 +83,9 @@ export class HysteresisClassifier {
     pauseFrequencyPerMin: number;
     ipuLengthSec: number | null;
     meanPitchHz: number | null;
-    loudnessDb: number;
+    loudnessDb: number | null;
     voiceActivityPercent: number;
+    wordsPerLast30Sec: number;
     syllablesInWindow: number;
     phonationSecInWindow: number;
     baseline: BaselineProfile | null;
@@ -98,6 +102,7 @@ export class HysteresisClassifier {
       meanPitchHz,
       loudnessDb,
       voiceActivityPercent,
+      wordsPerLast30Sec,
       syllablesInWindow,
       phonationSecInWindow,
       baseline,
@@ -199,13 +204,19 @@ export class HysteresisClassifier {
     this.smoothedCompositeZ = this.smoothedCompositeZ === null ? compositeZ : this.smoothedCompositeZ + this.smoothingAlpha * (compositeZ - this.smoothedCompositeZ);
     const smoothedCompositeZ = this.smoothedCompositeZ;
 
-    // --- Step 1: raw label ---
-    let raw: Classification;
-    if (baseline.isPersonal) {
-      raw = smoothedCompositeZ > settings.zTachylalia ? 'tachylalia' : 'normal';
-    } else {
-      raw = articulationRate > baseline.tachylaliaThreshold ? 'tachylalia' : 'normal';
-    }
+    // --- Step 1: raw label (Part D) ---
+    // Two independent conditions, either sufficient on its own:
+    //   condition_1 = personal, syll/s-baseline-relative (composite_z, or
+    //     the fixed-multiplier fallback when there's no personal std yet)
+    //   condition_2 = population-level: wordsPerLast30Sec above the normal
+    //     range's upper bound (constants.ts's
+    //     WORDS_PER_30SEC_TACHYLALIA_THRESHOLD), independent of this
+    //     patient's calibration -- catches a patient whose own baseline is
+    //     already fast, where condition_1 alone could stay quiet even at a
+    //     genuinely abnormal absolute rate.
+    const condition1 = baseline.isPersonal ? smoothedCompositeZ > settings.zTachylalia : articulationRate > baseline.tachylaliaThreshold;
+    const condition2 = wordsPerLast30Sec > C.WORDS_PER_30SEC_TACHYLALIA_THRESHOLD;
+    const raw: Classification = condition1 || condition2 ? 'tachylalia' : 'normal';
 
     // --- Step 2: hysteresis confirmation ---
     // Two independent guards against flapping: `requiredWindows` consecutive
@@ -225,10 +236,8 @@ export class HysteresisClassifier {
 
     const progress = Math.min(1, Math.min(this.rawCounters[raw] / this.requiredWindows, this.sustainSec > 0 ? sustainedSec / this.sustainSec : 1));
 
-    let edge = false;
     if (this.rawCounters[raw] >= this.requiredWindows && sustainedSec >= this.sustainSec && this.confirmed !== raw) {
       this.confirmed = raw;
-      edge = true;
     }
 
     // --- Step 3: confidence --- (uses the smoothed composite so one noisy
@@ -252,20 +261,26 @@ export class HysteresisClassifier {
     );
     this.lastConfidence = confidence;
 
-    // --- Step 4: feedback (vibration) trigger ---
-    // Strictly edge-triggered: fires exactly once on the NORMAL->TACHYLALIA
-    // transition (`edge` is only true the instant `this.confirmed` changes
-    // -- see Step 2), never while the state merely persists, and never
-    // again until a return to 'normal' followed by a fresh transition back
-    // to 'tachylalia'. A periodic "also re-fire every few seconds while
-    // still abnormal" branch used to live here; combined with how sticky
-    // the smoothed/hysteresis-confirmed state can be, it produced
-    // vibration that felt continuous and disconnected from the patient's
-    // actual current speech -- removed rather than just tuned, since the
-    // bug was the repeat-while-steady-state behavior itself, not its
-    // timing.
-    const trigger = edge && this.confirmed !== 'normal';
-    const reason = trigger ? this.confirmed : null;
+    // --- Step 4: feedback (vibration) trigger (Part F) ---
+    // Deliberately decoupled from Step 2's hysteresis-confirmed `this.confirmed`
+    // (which still gates the displayed classification badge, for visual
+    // stability) -- the alert instead follows `raw` directly, so it fires on
+    // the FIRST window where condition_1 OR condition_2 is true, not after
+    // hysteresisWindows/hysteresisSustainSec's ~1.5-3s wait. While `raw`
+    // stays 'tachylalia', it re-fires every FEEDBACK_REFRACTORY_SEC rather
+    // than only once per episode; `lastFeedbackFireTime` resets on any
+    // 'normal' window so the next abnormal onset is immediate again, not
+    // throttled by a stale cooldown from a prior episode.
+    let trigger = false;
+    if (raw === 'tachylalia') {
+      if (this.lastFeedbackFireTime === null || currentTime - this.lastFeedbackFireTime >= C.FEEDBACK_REFRACTORY_SEC) {
+        trigger = true;
+        this.lastFeedbackFireTime = currentTime;
+      }
+    } else {
+      this.lastFeedbackFireTime = null;
+    }
+    const reason: Classification | null = trigger ? 'tachylalia' : null;
 
     return {
       classification: this.confirmed,

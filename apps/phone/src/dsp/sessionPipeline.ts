@@ -64,7 +64,7 @@ export interface MetricsFrame {
   speakingDurationSec: number;
   meanPitchHz: number | null;
   pitchVariabilityHz: number | null;
-  loudnessDb: number;
+  loudnessDb: number | null;
   voiceActivityPercent: number;
   speechConsistency: number;
   compositeScore: number;
@@ -77,6 +77,8 @@ export interface MetricsFrame {
   meanPitchTrendHz: number | null;
   timeInAbnormalStateSec: number;
   recoveryTimeSec: number | null;
+  /** Part A: false when this window has (near-)zero VAD-confirmed phonation -- articulationRateSPS/averageSyllableDurationSec/interSyllableIntervalSec/meanPitchHz/loudnessDb are all held at their last valid reading rather than freshly computed, and pitch/loudness alerts must not fire for this window (see usePitchAlert.ts/useLoudnessAlert.ts). */
+  livePhonationActive: boolean;
 }
 
 function featureSetFields(f: FeatureSet) {
@@ -94,7 +96,7 @@ function featureSetFields(f: FeatureSet) {
     speakingDurationSec: round(f.speakingDurationSec, 2),
     meanPitchHz: roundOrNull(f.meanPitchHz, 1),
     pitchVariabilityHz: roundOrNull(f.pitchVariabilityHz, 2),
-    loudnessDb: round(f.loudnessDb, 2),
+    loudnessDb: roundOrNull(f.loudnessDb, 2),
     voiceActivityPercent: round(f.voiceActivityPercent, 1),
     speechConsistency: round(f.speechConsistency, 3),
     compositeScore: round(f.compositeScore, 1),
@@ -135,6 +137,15 @@ export class SessionPipeline {
   private readonly pitchHistory: Array<[number, number]> = [];
   private abnormalStateStart: number | null = null;
   private recoveryPendingSince: number | null = null;
+
+  // Part A: last known-good reading for each VAD-gated live field, held
+  // forward (instead of a fresh, silence/noise-derived number) whenever a
+  // window has no VAD-confirmed phonation -- see applyLiveVadGate().
+  private lastValidArticulationRateSPS = 0;
+  private lastValidSyllableDurationSec: number | null = null;
+  private lastValidInterSyllableIntervalSec: number | null = null;
+  private lastValidMeanPitchHz: number | null = null;
+  private lastValidLoudnessDb: number | null = null;
 
   constructor(sessionId: string, baseline: BaselineProfile | null, settings: Settings = defaultSettings) {
     this.sessionId = sessionId;
@@ -266,6 +277,35 @@ export class SessionPipeline {
     };
   }
 
+  /**
+   * Part A: articulationRateSPS/averageSyllableDurationSec/
+   * interSyllableIntervalSec/meanPitchHz/loudnessDb must only reflect
+   * VAD-confirmed speech -- when this window has (near-)zero phonation,
+   * hold each field at its last valid reading instead of the freshly
+   * computed (silence/noise-derived) one. Returns a copy of `features`
+   * with those five fields overridden, and updates the held-value cache as
+   * a side effect whenever the window *did* have live phonation.
+   */
+  private applyLiveVadGate(features: FeatureSet, livePhonationActive: boolean): FeatureSet {
+    if (livePhonationActive) {
+      this.lastValidArticulationRateSPS = features.articulationRateSPS;
+      if (features.averageSyllableDurationSec !== null) this.lastValidSyllableDurationSec = features.averageSyllableDurationSec;
+      if (features.interSyllableIntervalSec !== null) this.lastValidInterSyllableIntervalSec = features.interSyllableIntervalSec;
+      if (features.meanPitchHz !== null) this.lastValidMeanPitchHz = features.meanPitchHz;
+      if (features.loudnessDb !== null) this.lastValidLoudnessDb = features.loudnessDb;
+      return features;
+    }
+
+    return {
+      ...features,
+      articulationRateSPS: this.lastValidArticulationRateSPS,
+      averageSyllableDurationSec: this.lastValidSyllableDurationSec,
+      interSyllableIntervalSec: this.lastValidInterSyllableIntervalSec,
+      meanPitchHz: this.lastValidMeanPitchHz,
+      loudnessDb: this.lastValidLoudnessDb,
+    };
+  }
+
   private analyze(elapsed: number): MetricsFrame {
     const [windowAudio, windowStartTime, windowEndTime] = this.trailingWindow();
 
@@ -294,25 +334,28 @@ export class SessionPipeline {
 
     const syllablesInWindow = this.stats.windowedNucleiCount();
     const phonationInWindow = this.stats.windowedPhonationSec(windowStartTime, windowEndTime, openKind, openStart, openEnd);
+    const livePhonationActive = phonationInWindow > C.MIN_LIVE_PHONATION_SEC;
+    const liveFeatures = this.applyLiveVadGate(features, livePhonationActive);
 
     const result = this.classifier.update({
-      articulationRate: features.articulationRateSPS,
-      speechToPauseRatio: features.speechToPauseRatio,
-      avgSyllableDurationSec: features.averageSyllableDurationSec,
-      interSyllableIntervalSec: features.interSyllableIntervalSec,
-      pauseDurationSec: features.pauseDurationSec,
-      pauseFrequencyPerMin: features.pauseFrequencyPerMin,
-      ipuLengthSec: features.interPausalUnitLengthSec,
-      meanPitchHz: features.meanPitchHz,
-      loudnessDb: features.loudnessDb,
-      voiceActivityPercent: features.voiceActivityPercent,
+      articulationRate: liveFeatures.articulationRateSPS,
+      speechToPauseRatio: liveFeatures.speechToPauseRatio,
+      avgSyllableDurationSec: liveFeatures.averageSyllableDurationSec,
+      interSyllableIntervalSec: liveFeatures.interSyllableIntervalSec,
+      pauseDurationSec: liveFeatures.pauseDurationSec,
+      pauseFrequencyPerMin: liveFeatures.pauseFrequencyPerMin,
+      ipuLengthSec: liveFeatures.interPausalUnitLengthSec,
+      meanPitchHz: liveFeatures.meanPitchHz,
+      loudnessDb: liveFeatures.loudnessDb,
+      voiceActivityPercent: liveFeatures.voiceActivityPercent,
+      wordsPerLast30Sec: liveFeatures.wordsPerLast30Sec,
       syllablesInWindow,
       phonationSecInWindow: phonationInWindow,
       baseline: this.baseline,
       currentTime: elapsed,
     });
 
-    const trendFields = this.updateTrendsAndState(features, result, elapsed);
+    const trendFields = this.updateTrendsAndState(liveFeatures, result, elapsed);
 
     return {
       type: 'metrics',
@@ -334,8 +377,9 @@ export class SessionPipeline {
       zPitch: round(result.zPitch, 3),
       zLoudness: round(result.zLoudness, 3),
       zVoiceActivity: round(result.zVoiceActivity, 3),
-      ...featureSetFields(features),
+      ...featureSetFields(liveFeatures),
       ...trendFields,
+      livePhonationActive,
     };
   }
 
@@ -388,7 +432,7 @@ export interface CalibrationClipResult {
   descriptive: {
     speechRateWPM: number;
     meanPitchHz: number | null;
-    loudnessDb: number;
+    loudnessDb: number | null;
     pauseDurationSec: number | null;
     speechRatio: number;
     pauseRatio: number;
@@ -460,12 +504,15 @@ export function analyzeCalibrationClip(pcmFloat: Float32Array, sampleRate: numbe
       const chunk = pcmFloat.slice(i * subLen, (i + 1) * subLen);
       const { features: subFeatures } = analyzeClip(chunk, sampleRate, defaultBaseline);
 
-      // Pause frequency / loudness / voice-activity are well-defined even
-      // for a subwindow with no detected syllable (e.g. a silent 4s chunk),
-      // so these are sampled unconditionally, unlike the syllable-dependent
-      // group below.
+      // Pause frequency / voice-activity are well-defined even for a
+      // subwindow with no detected syllable (e.g. a silent 4s chunk), so
+      // they're sampled unconditionally, unlike the syllable-dependent
+      // group below. Loudness is VAD-gated (Part A) and can be null for a
+      // subwindow with no VAD-confirmed speech at all -- a silent chunk
+      // must not contribute a noise-floor "loudness" sample to the
+      // patient's baseline.
       pauseFrequencySamples.push(subFeatures.pauseFrequencyPerMin);
-      loudnessSamples.push(subFeatures.loudnessDb);
+      if (subFeatures.loudnessDb !== null) loudnessSamples.push(subFeatures.loudnessDb);
       voiceActivitySamples.push(subFeatures.voiceActivityPercent);
       if (subFeatures.pauseDurationSec !== null) pauseDurationSamples.push(subFeatures.pauseDurationSec);
       if (subFeatures.meanPitchHz !== null) meanPitchSamples.push(subFeatures.meanPitchHz);
@@ -498,7 +545,7 @@ export function analyzeCalibrationClip(pcmFloat: Float32Array, sampleRate: numbe
     descriptive: {
       speechRateWPM: round(wholeFeatures.speechRateWPM, 2),
       meanPitchHz: roundOrNull(wholeFeatures.meanPitchHz, 1),
-      loudnessDb: round(wholeFeatures.loudnessDb, 2),
+      loudnessDb: roundOrNull(wholeFeatures.loudnessDb, 2),
       pauseDurationSec: roundOrNull(wholeFeatures.pauseDurationSec, 3),
       speechRatio: round(wholeFeatures.voiceActivityPercent / 100, 3),
       pauseRatio: round(elapsed > C.EPS ? pauseSec / elapsed : 0, 3),

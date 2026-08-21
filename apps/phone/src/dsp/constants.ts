@@ -95,3 +95,59 @@ export const EPS = 1e-10;
 // still just "not enough data yet" (N/A); at or beyond it, 0 completed
 // pauses is treated as a genuine, meaningful finding for that metric.
 export const MIN_ELAPSED_FOR_ZERO_METRIC_SEC = 2.0;
+
+// --- Live VAD gating (Part A) ---
+// A trailing analysis window with less than this much VAD-confirmed
+// phonation is "not actually speech" for live-display purposes -- well
+// below minPhonationSecPerWindow (the classifier's much stricter
+// sample-sufficiency gate), this only exists to distinguish "genuinely no
+// speech happened in this window" (freeze/suppress) from "some speech, just
+// not quite enough to trust a classification decision" (still a real,
+// freshly-computed reading).
+export const MIN_LIVE_PHONATION_SEC = 0.05;
+
+// --- Feedback (vibration) cadence (Part F) ---
+// Gap between repeated tachylalia-alert firings while the patient stays
+// continuously abnormal. The FIRST firing on a normal->abnormal transition
+// is immediate (no hysteresis wait) -- this only throttles re-fires after
+// that.
+export const FEEDBACK_REFRACTORY_SEC = 4.0;
+
+// --- Dual-threshold detection (Part D) ---
+// Population-level normal reference ranges, independent of the patient's
+// personal calibration. WORDS_PER_30SEC_TACHYLALIA_THRESHOLD is
+// condition_2's trigger: wordsPerLast30Sec above this alone is sufficient
+// to raise TACHYLALIA, regardless of composite_z.
+export const WPM_NORMAL_MIN = 100;
+export const WPM_NORMAL_MAX = 145;
+export const WORDS_PER_30SEC_NORMAL_MIN = 50;
+export const WORDS_PER_30SEC_NORMAL_MAX = 73;
+export const WORDS_PER_30SEC_TACHYLALIA_THRESHOLD = WORDS_PER_30SEC_NORMAL_MAX;
+
+// --- Loudness alert (Part G) ---
+// The app's loudnessDb is real dBFS (0 = digital full scale, so readings
+// are <= 0 -- see features.ts's windowedLoudnessDb doc comment), but the
+// product spec's threshold ("65") is stated as an absolute dB-SPL-style
+// value, matching the clinical convention that ~65dB SPL is a raised/loud
+// speaking voice. There's no per-device mic calibration to convert dBFS to
+// true SPL, so this offset is a fixed approximation (dBSPL ~= dBFS +
+// LOUDNESS_SPL_OFFSET_DB) applied only for this alert's threshold check --
+// it does not change the dBFS value shown on the Loudness param card.
+export const LOUDNESS_SPL_OFFSET_DB = 100;
+export const LOUDNESS_ALERT_SPL_THRESHOLD = 65;
+export const LOUDNESS_ALERT_DBFS_THRESHOLD = LOUDNESS_ALERT_SPL_THRESHOLD - LOUDNESS_SPL_OFFSET_DB;
+
+// --- Sanity bounds (Part C) ---
+// A residual DSP bug must never be able to put a physically implausible
+// number on a metrics frame -- these are a safety net on top of (not a
+// replacement for) the root-cause fixes in features.ts/sessionPipeline.ts.
+// A value outside its bound is treated as invalid for that window (held at
+// the last valid value, same as Part A's VAD-silence freeze), never
+// clamped-and-displayed.
+export const ARTICULATION_RATE_MAX_SPS = 12.5;
+export const SYLLABLE_DURATION_MIN_SEC = 0.05;
+export const SYLLABLE_DURATION_MAX_SEC = 2.0;
+export const INTER_SYLLABLE_INTERVAL_MIN_SEC = 0.05;
+export const INTER_SYLLABLE_INTERVAL_MAX_SEC = 2.0;
+export const LOUDNESS_REALISTIC_MIN_DBFS = -60.0;
+export const LOUDNESS_REALISTIC_MAX_DBFS = 0.0;

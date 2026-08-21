@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useSessionContext } from '../context/SessionContext';
 import { useCalibrationProfile } from '../hooks/useCalibrationProfile';
 import { usePitchAlert } from '../hooks/usePitchAlert';
+import { useLoudnessAlert } from '../hooks/useLoudnessAlert';
 import { StatusPill } from '../components/StatusPill';
 import { ClassificationBadge } from '../components/ClassificationBadge';
 import { ParamGrid } from '../components/ParamGrid';
@@ -49,6 +50,7 @@ export function LiveSessionPage() {
   const session = useSessionContext();
   const { profile: calibration } = useCalibrationProfile();
   const pitchAlert = usePitchAlert(session.latest);
+  const loudnessAlert = useLoudnessAlert(session.latest);
 
   const [flashActive, setFlashActive] = useState(false);
   useEffect(() => {
@@ -154,6 +156,7 @@ export function LiveSessionPage() {
       </div>
 
       <Toast message={pitchAlert.toastMessage} onDismiss={pitchAlert.dismiss} />
+      <Toast message={loudnessAlert.toastMessage} onDismiss={loudnessAlert.dismiss} bottomClassName="bottom-40" />
     </div>
   );
 }

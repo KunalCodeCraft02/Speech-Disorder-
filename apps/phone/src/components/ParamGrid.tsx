@@ -44,7 +44,8 @@ export function ParamGrid({ frame, calibrated }: { frame: MetricsFrame | null; c
       {PARAMS.map((param) => {
         const value = frame ? param.value(frame) : null;
         const z = frame ? param.z(frame) : 0;
-        const tier = tierForZ(z, calibrated && frame != null && frame.classification !== 'uncalibrated');
+        const active = calibrated && frame != null && frame.classification !== 'uncalibrated';
+        const tier = active ? (param.tier ? param.tier(frame as MetricsFrame) : tierForZ(z, true)) : 'uncalibrated';
         const style = TIER_STYLE[tier];
         const displayValue = formatMetric(value, param.digits);
         const hasValue = displayValue !== NA;
