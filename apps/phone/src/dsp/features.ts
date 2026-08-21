@@ -63,7 +63,6 @@ export class RunningStats {
   private countIsi = 0;
   private lastNucleusTime: number | null = null;
   private lastNucleusPauseStamp = 0;
-  private lastValidSpeechToPauseRatio: number | null = null;
 
   recentNucleiTimes: number[] = [];
   recentNucleiTimes30s: number[] = [];
@@ -277,21 +276,11 @@ export class RunningStats {
    * current speaking behavior, which both false-triggers tachylalia later
    * in a session and -- being monotonic -- can never recover back to
    * NORMAL once it has.
-   *
-   * N/A-fix: the trailing window very often contains zero completed-pause
-   * time (a fluent burst of speech with no >=MIN_PAUSE_SEC gap inside the
-   * last analysisWindowSec), which is a genuine divide-by-zero, not a
-   * "no data yet" state -- once at least one real ratio has been computed
-   * this session, hold it forward through those windows instead of
-   * reverting to null every time, the same "last known reading" pattern
-   * already used for loudnessDb/meanPitchHz elsewhere in this pipeline.
-   * Still null (correctly) until the first completed pause of the session.
    */
   speechToPauseRatio(windowStart: number, windowEnd: number, openKind: SegmentKind, openStart: number, openEnd: number): number | null {
     const speechSec = this.windowedPhonationSec(windowStart, windowEnd, openKind, openStart, openEnd);
     const pauseSec = this.windowedPauseSec(windowStart, windowEnd, openKind, openStart, openEnd);
-    if (pauseSec > C.EPS) this.lastValidSpeechToPauseRatio = speechSec / pauseSec;
-    return this.lastValidSpeechToPauseRatio;
+    return pauseSec > C.EPS ? speechSec / pauseSec : null;
   }
 }
 
