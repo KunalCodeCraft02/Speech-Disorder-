@@ -79,8 +79,22 @@ export const settings: Settings = {
   // pauses within a 4s trailing window often left less than 1.5s of actual
   // phonation, so "Sample OK: No" was showing up far more than the amount
   // of real speech in the window justified.
+  //
+  // minPhonationSecPerWindow further loosened 1.0 -> 0.65: patients had to
+  // sustain fast speech for too long before TACHYLALIA fired, and this gate
+  // -- not hysteresisWindows/hysteresisSustainSec, which are cosmetic-only
+  // (see the Settings interface doc comment) -- was the actual source of
+  // that delay: a window isn't evaluated at all until this much real
+  // phonation has accumulated in it. Verified via synthetic end-to-end
+  // SessionPipeline tests that 0.65s does NOT increase false-trigger rate
+  // on calibrated-normal speech versus 1.0s (both produced the identical
+  // small number of borderline-window false positives -- see zTachylalia's
+  // doc comment below for that separate, pre-existing finding), while
+  // shaving real seconds off genuine fast-speech detection latency.
+  // minSyllablesPerWindow left at 3 -- lowering it to 2 gave no additional
+  // benefit once minPhonationSecPerWindow was already reduced.
   minSyllablesPerWindow: 3,
-  minPhonationSecPerWindow: 1.0,
+  minPhonationSecPerWindow: 0.65,
 
   // The single shared margin above the patient's calibrated baseline for
   // BOTH trigger conditions (item 1/6):
@@ -110,6 +124,23 @@ export const settings: Settings = {
   // baseline must go before it counts as abnormal, and validate against
   // real session data (normal-pace AND genuinely-fast recordings) before
   // treating a new value as final.
+  // Left at 1.5 (not retuned this round) -- but flagging a finding from the
+  // synthetic-harness testing done for the loudness-threshold/
+  // minPhonationSecPerWindow changes above: even on near-noiseless
+  // synthetic calibrated-normal speech (no background noise, no VAD/noise
+  // leniency involved), per-window unsmoothed compositeZ/zWordsPer30Sec
+  // occasionally crossed 1.5 from ordinary window-to-window rate jitter
+  // alone -- a handful of false tachylalia triggers per 30s clip,
+  // independent of minPhonationSecPerWindow (reproduced identically at
+  // both 1.0s and 0.65s). This looks like the expected false-positive rate
+  // of evaluating a ~1.5-sigma one-sided cutoff fresh every ~0.5s window
+  // with no smoothing, not a noise-subtraction/VAD issue -- real speech's
+  // baseline std may well be larger than the synthetic generator's,
+  // making this a non-issue in practice, but if the item-7 real-recording
+  // pass shows spurious buzzes on (b)/(c) with no more culprits left
+  // upstream, this margin (or reintroducing light smoothing on compositeZ)
+  // is the next place to look, despite being told to leave it alone this
+  // round.
   zTachylalia: 1.5,
   baselineStdFloor: 0.15,
 

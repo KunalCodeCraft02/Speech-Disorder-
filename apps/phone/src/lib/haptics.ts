@@ -51,36 +51,30 @@ export async function mainAlertHaptic(): Promise<boolean> {
   }
 }
 
-// Item 10: two very quick short pulses, clearly different by feel from the
-// tachylalia alert's single ~2.2s continuous buzz above.
-const TONE_ALERT_PULSE_MS = 90;
-const TONE_ALERT_GAP_MS = 110;
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+// Item 10/6: one short, light pulse -- clearly shorter and gentler than the
+// tachylalia alert's ~2.2s continuous buzz above, so the two are
+// distinguishable by feel alone without needing to count pulses. Was
+// briefly a two-pulse pattern; changed to a single pulse per explicit
+// spec ("a single brief, light pulse", not a double-tap) -- duration well
+// under half of even one of the old pulses-plus-gap, and nowhere near the
+// main alert's duration, so there's no ambiguity between the two even for
+// a distracted patient.
+const TONE_ALERT_PULSE_MS = 80;
 
 /**
- * Tone (loudness) alert: two short vibration pulses separated by a brief
- * gap -- distinct from the tachylalia alert's one long continuous buzz
- * (mainAlertHaptic above), so the two are distinguishable by feel alone
- * per item 10. Native: two sequential Haptics.vibrate({duration}) calls
- * with an awaited gap between them (Capacitor's Haptics plugin has no
- * built-in multi-pulse pattern API). Web: navigator.vibrate() natively
- * accepts a [pulse, gap, pulse] pattern array in one call. No `inFlight`
- * guard here: unlike the main alert this is a brief, non-overlapping
- * effect, and the hook's own toneAlertCooldownSec already prevents rapid
- * re-firing.
+ * Tone (loudness) alert: one short, light vibration pulse -- distinct from
+ * the tachylalia alert's one long continuous buzz (mainAlertHaptic above)
+ * by both duration and feel. No `inFlight` guard here: unlike the main
+ * alert this is a single brief, non-overlapping effect, and the hook's own
+ * toneAlertCooldownSec already prevents rapid re-firing.
  */
 export async function toneAlertHaptic(): Promise<boolean> {
   if (Capacitor.isNativePlatform()) {
     await Haptics.vibrate({ duration: TONE_ALERT_PULSE_MS });
-    await delay(TONE_ALERT_GAP_MS);
-    await Haptics.vibrate({ duration: TONE_ALERT_PULSE_MS });
     return true;
   }
   if (VIBRATE_SUPPORTED) {
-    navigator.vibrate([TONE_ALERT_PULSE_MS, TONE_ALERT_GAP_MS, TONE_ALERT_PULSE_MS]);
+    navigator.vibrate(TONE_ALERT_PULSE_MS);
     return true;
   }
   return false;

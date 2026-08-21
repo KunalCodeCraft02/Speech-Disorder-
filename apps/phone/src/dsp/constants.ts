@@ -20,6 +20,15 @@ export const NOISE_UPDATE_PERCENTILE = 20.0;
 // this from ever fully crushing genuine speech toward silence/musical-noise
 // artifacts, which would otherwise also break the (now pre-AGC, see
 // preprocessing.ts) loudness measurement.
+//
+// Regression-fix note: this and VAD_ENERGY_MARGIN_DB/VAD_ZCR_MAX below were
+// suspected culprits for a later over-sensitivity regression, but git
+// history shows neither this value nor the two VAD ones were ever eased
+// after this commit -- they're unchanged since the tightening above, still
+// at their strict values. Left as-is here; the actual regression traced to
+// the loudness-averaging bug fix legitimately raising loudnessDb (see
+// LOUDNESS_THRESHOLD_DBFS below) and to zTachylalia's 2.0->1.5 retune
+// (config.ts), not to noise/VAD leniency.
 export const NOISE_OVERSUBTRACTION_FACTOR = 1.8;
 export const NOISE_SPECTRAL_FLOOR = 0.05;
 export const NOISE_ESTIMATE_SMOOTHING = 0.9;
@@ -150,10 +159,10 @@ export const FEEDBACK_EPISODE_GAP_TOLERANCE_SEC = 1.5;
 // ~5%) so the displayed reference range stays consistent with the
 // direction of the zTachylalia retune above -- a small adjustment, not a
 // large drop.
-export const WPM_NORMAL_MIN = 100;
-export const WPM_NORMAL_MAX = 138;
-export const WORDS_PER_30SEC_NORMAL_MIN = 50;
-export const WORDS_PER_30SEC_NORMAL_MAX = 69;
+export const WPM_NORMAL_MIN = 105;
+export const WPM_NORMAL_MAX = 143;
+export const WORDS_PER_30SEC_NORMAL_MIN = 55;
+export const WORDS_PER_30SEC_NORMAL_MAX = 74;
 
 // --- Tone (loudness) alert (Part G, item 2/5) ---
 // The app's loudnessDb is real dBFS (0 = digital full scale, so readings
@@ -171,7 +180,32 @@ export const WORDS_PER_30SEC_NORMAL_MAX = 69;
 // LOUDNESS_THRESHOLD_DBFS is now a single, direct cutoff in the exact same
 // units/scale as the Loudness param card -- no conversion, what you see on
 // the card is what's compared against this number.
-export const LOUDNESS_THRESHOLD_DBFS = -55.0;
+//
+// Retuned -55.0 -> -33.0 (regression fix): that -59dBFS "genuinely loud"
+// reference number was measured through features.ts's windowedLoudnessDb
+// BEFORE its averaging-bug fix (see the RunningStats.windowedLoudnessDb
+// doc comment) -- the old naive dB-arithmetic-mean let near-silent
+// micro-moments (unvoiced consonants, inter-syllable gaps) drag every
+// window's average down toward -100/-200dB territory, so a real "loud
+// speech" window's reported average was itself artificially quiet. Now
+// that those outliers are filtered out and the rest is averaged correctly
+// in linear power domain, the SAME actual loudness reads meaningfully
+// higher (less negative) than before -- confirmed via synthetic
+// end-to-end SessionPipeline tests (same methodology as the averaging-fix
+// commit): a calibrated-normal speaking baseline landed around -37dBFS,
+// well above the old -55 cutoff, so the tone alert was firing on
+// essentially all speech regardless of actual loudness, not just genuinely
+// loud stretches. -33.0 restores real separation between normal and loud
+// speech in that synthetic test (clean margin held from -36 down to -28:
+// calibrated-normal speech landed a comfortable ~4dB under the cutoff,
+// genuinely loud speech a comfortable ~10dB over it), but the exact number
+// is inherently device/mic/room dependent and MUST be confirmed on a real
+// device per the classification engine's testing checklist: read the live
+// Loudness param card's dBFS (same units this constant is compared
+// against) while speaking at a normal conversational volume vs. genuinely
+// raising your voice, and set this value a few dB above the normal
+// reading and a few dB below the loud one.
+export const LOUDNESS_THRESHOLD_DBFS = -33.0;
 
 // --- Sanity bounds (Part C) ---
 // A residual DSP bug must never be able to put a physically implausible

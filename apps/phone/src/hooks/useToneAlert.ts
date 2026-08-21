@@ -8,8 +8,8 @@ import { toneAlertHaptic } from '../lib/haptics';
  * Tone alert -- driven by loudness only (item 5: pitch no longer feeds
  * this at all; zPitch/meanPitchHz stay displayed as a metric on their own
  * param card, nothing more). Fires "Lower your tone" plus a distinct
- * two-pulse haptic (see haptics.ts's toneAlertHaptic, clearly different by
- * feel from the continuous tachylalia buzz) once loudnessDb has stayed
+ * single short haptic pulse (see haptics.ts's toneAlertHaptic, clearly
+ * different by feel from the continuous tachylalia buzz) once loudnessDb has stayed
  * above LOUDNESS_THRESHOLD_DBFS for toneAlertSustainSec, strictly gated to
  * actual VAD-confirmed speech:
  *
