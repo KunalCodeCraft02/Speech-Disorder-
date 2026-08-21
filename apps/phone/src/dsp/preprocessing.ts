@@ -88,7 +88,22 @@ export class StreamingSpectralDenoiser {
     if (this.recentFrameDb.length > 50) this.recentFrameDb.shift();
   }
 
-  process(chunk: Float32Array): Float32Array {
+  /**
+   * Returns the denoised+AGC'd audio (as before) plus one pre-AGC loudness
+   * reading (dB) per emitted hop, in order -- `preAgcLoudnessDb.length *
+   * hopSize === audio.length` always holds, so a caller can timestamp each
+   * entry against its own running output-sample cursor (see
+   * AudioPreprocessor.process()).
+   *
+   * The pre-AGC reading is taken from `reconFrame` (after spectral
+   * subtraction, before the AGC gain stage) rather than the final AGC'd
+   * output: AGC deliberately drives RMS toward a fixed AGC_TARGET_RMS, which
+   * erases genuine loud-vs-quiet variation -- a signal that's been
+   * normalized to a constant target can't be used to detect "the patient is
+   * speaking too loud" (that's what was collapsing loudnessDb toward N/A /
+   * always-or-never-triggering rather than a real value).
+   */
+  process(chunk: Float32Array): { audio: Float32Array; preAgcLoudnessDb: number[] } {
     if (chunk.length) {
       const merged = new Float32Array(this.inputTail.length + chunk.length);
       merged.set(this.inputTail);
@@ -97,6 +112,7 @@ export class StreamingSpectralDenoiser {
     }
 
     const readyChunks: Float32Array[] = [];
+    const preAgcLoudnessDb: number[] = [];
 
     while (this.inputTail.length >= this.frameSize) {
       const frame = this.inputTail.subarray(0, this.frameSize);
@@ -119,6 +135,8 @@ export class StreamingSpectralDenoiser {
       const reconFrame = irfftFromMagPhase(subMag, phase, this.frameSize);
 
       const frameRms = rms(reconFrame) + C.EPS;
+      preAgcLoudnessDb.push(20 * Math.log10(frameRms));
+
       const targetGain = Math.min(C.AGC_MAX_GAIN, Math.max(C.AGC_MIN_GAIN, C.AGC_TARGET_RMS / frameRms));
       this.agcGain = C.AGC_SMOOTHING * this.agcGain + (1 - C.AGC_SMOOTHING) * targetGain;
 
@@ -134,7 +152,7 @@ export class StreamingSpectralDenoiser {
       this.outputOverlap = buf.slice(this.hopSize);
     }
 
-    if (readyChunks.length === 0) return new Float32Array(0);
+    if (readyChunks.length === 0) return { audio: new Float32Array(0), preAgcLoudnessDb: [] };
     const totalLen = readyChunks.reduce((sum, c) => sum + c.length, 0);
     const out = new Float32Array(totalLen);
     let offset = 0;
@@ -142,22 +160,42 @@ export class StreamingSpectralDenoiser {
       out.set(chunk, offset);
       offset += chunk.length;
     }
-    return out;
+    return { audio: out, preAgcLoudnessDb };
   }
+}
+
+export interface LoudnessSample {
+  /** Seconds, same absolute timeline as VoiceActivityDetector's FrameDecision.time (both are elapsed denoised-output samples / sampleRate, counted from session start). */
+  time: number;
+  /** Pre-AGC dB (see StreamingSpectralDenoiser.process()'s doc comment). */
+  db: number;
 }
 
 export class AudioPreprocessor {
   private readonly bandpass: BandpassFilter;
   private readonly denoiser: StreamingSpectralDenoiser;
+  private readonly sampleRate: number;
+  private readonly hopSize: number;
+  private outputSamplesEmitted = 0;
 
-  constructor(sampleRate: number) {
+  constructor(sampleRate: number, hopSize: number = C.STFT_HOP_SIZE) {
     this.bandpass = new BandpassFilter(sampleRate);
     this.denoiser = new StreamingSpectralDenoiser();
+    this.sampleRate = sampleRate;
+    this.hopSize = hopSize;
   }
 
-  process(chunk: Float32Array): Float32Array {
+  process(chunk: Float32Array): { audio: Float32Array; loudnessSamples: LoudnessSample[] } {
     const filtered = this.bandpass.process(chunk);
-    return this.denoiser.process(filtered);
+    const { audio, preAgcLoudnessDb } = this.denoiser.process(filtered);
+
+    const loudnessSamples: LoudnessSample[] = preAgcLoudnessDb.map((db, i) => ({
+      time: (this.outputSamplesEmitted + i * this.hopSize) / this.sampleRate,
+      db,
+    }));
+    this.outputSamplesEmitted += audio.length;
+
+    return { audio, loudnessSamples };
   }
 }
 

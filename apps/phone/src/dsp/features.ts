@@ -6,6 +6,7 @@ import type { BaselineProfile } from './baseline';
 import type { PitchFrame } from './pitch';
 import { voicedF0Array } from './pitch';
 import type { FrameDecision } from './vad';
+import type { LoudnessSample } from './preprocessing';
 import { segmentDuration, type Segment, type SegmentKind } from './segmentation';
 
 export interface FeatureSet {
@@ -67,6 +68,7 @@ export class RunningStats {
   recentNucleiTimes30s: number[] = [];
   recentFrameDecisions: FrameDecision[] = [];
   recentSegments: Segment[] = [];
+  recentLoudnessSamples: LoudnessSample[] = [];
 
   addSegments(segments: Segment[], windowSec: number, currentTime: number): void {
     for (const seg of segments) {
@@ -89,6 +91,13 @@ export class RunningStats {
     this.recentFrameDecisions.push(...decisions);
     const cutoff = decisions[decisions.length - 1].time - windowSec;
     while (this.recentFrameDecisions.length && this.recentFrameDecisions[0].time < cutoff) this.recentFrameDecisions.shift();
+  }
+
+  addLoudnessSamples(samples: LoudnessSample[], windowSec: number): void {
+    if (!samples.length) return;
+    this.recentLoudnessSamples.push(...samples);
+    const cutoff = samples[samples.length - 1].time - windowSec;
+    while (this.recentLoudnessSamples.length && this.recentLoudnessSamples[0].time < cutoff) this.recentLoudnessSamples.shift();
   }
 
   addNuclei(nucleiTimes: number[], windowSec: number, currentTime: number): void {
@@ -154,29 +163,44 @@ export class RunningStats {
   }
 
   /**
-   * Relative dBFS-style frame energy (0 dBFS = digital full scale, so all
-   * real readings are negative) from the VAD's own energy estimate -- not a
-   * calibrated microphone-relative SPL measurement (Part 13). Averaged over
-   * recentFrameDecisions (already windowed), so a single loud/quiet frame
-   * doesn't move the displayed value on its own.
-   *
-   * VAD-gated (Part A): null when this window has no VAD-confirmed speech
-   * frames at all, rather than falling back to the mean of non-speech
-   * frames (background noise floor) or a hardcoded -60 -- either fallback
-   * would report a "loudness" reading that isn't actually the patient
-   * speaking, which could also spuriously feed the loudness alert (Part G)
-   * during silence. The caller (sessionPipeline.ts) holds the last valid
-   * reading forward when this is null, rather than displaying/alerting on
-   * a null.
+   * Speech-time-only pre-AGC loudness readings within [windowStart,
+   * windowEnd] -- sourced from recentLoudnessSamples (see
+   * preprocessing.ts's StreamingSpectralDenoiser.process() doc comment for
+   * why these are taken BEFORE the AGC gain stage: AGC drives RMS toward a
+   * fixed target, which erases the very loud-vs-quiet variation this metric
+   * exists to measure). "Speech time" is deliberately re-derived from
+   * recentSegments/the open segment (the same VAD-confirmed intervals
+   * windowedPhonationSec uses), not from the loudness samples' own
+   * amplitude, so a loud noise burst that VAD never confirmed as speech
+   * can't contribute a reading.
    */
-  windowedLoudnessDb(): number | null {
-    const speechEnergies = this.recentFrameDecisions.filter((d) => d.isSpeech).map((d) => d.energyDb);
-    return speechEnergies.length ? mean(speechEnergies) : null;
+  private windowedSpeechLoudnessValues(windowStart: number, windowEnd: number, openKind: SegmentKind, openStart: number, openEnd: number): number[] {
+    const inSpeech = (t: number): boolean => {
+      for (const seg of this.recentSegments) {
+        if (seg.kind === 'speech' && t >= seg.start && t < seg.end) return true;
+      }
+      return openKind === 'speech' && t >= openStart && t < openEnd;
+    };
+    return this.recentLoudnessSamples.filter((s) => s.time >= windowStart && s.time <= windowEnd && inSpeech(s.time)).map((s) => s.db);
   }
 
-  windowedLoudnessStdDb(): number {
-    const speechEnergies = this.recentFrameDecisions.filter((d) => d.isSpeech).map((d) => d.energyDb);
-    return speechEnergies.length >= 2 ? std(speechEnergies) : 0;
+  /**
+   * VAD-gated (Part A): null when this window has no VAD-confirmed speech
+   * at all, rather than falling back to a background-noise reading or a
+   * hardcoded default -- either fallback would report a "loudness" reading
+   * that isn't actually the patient speaking, which could also spuriously
+   * feed the tone alert during silence. The caller (sessionPipeline.ts)
+   * holds the last valid reading forward when this is null, rather than
+   * displaying/alerting on a null.
+   */
+  windowedLoudnessDb(windowStart: number, windowEnd: number, openKind: SegmentKind, openStart: number, openEnd: number): number | null {
+    const values = this.windowedSpeechLoudnessValues(windowStart, windowEnd, openKind, openStart, openEnd);
+    return values.length ? mean(values) : null;
+  }
+
+  windowedLoudnessStdDb(windowStart: number, windowEnd: number, openKind: SegmentKind, openStart: number, openEnd: number): number {
+    const values = this.windowedSpeechLoudnessValues(windowStart, windowEnd, openKind, openStart, openEnd);
+    return values.length >= 2 ? std(values) : 0;
   }
 
   meanIsi(): number | null {
@@ -320,7 +344,7 @@ export function computeFeatureSet(
   else if (voicedF0.length > 1) pitchVariability = std(Array.from(voicedF0));
   else pitchVariability = 0;
 
-  const rawLoudnessDb = stats.windowedLoudnessDb();
+  const rawLoudnessDb = stats.windowedLoudnessDb(windowStart, windowEnd, openKind, openStart, openEnd);
   const loudnessDb =
     rawLoudnessDb !== null && withinBounds(rawLoudnessDb, C.LOUDNESS_REALISTIC_MIN_DBFS, C.LOUDNESS_REALISTIC_MAX_DBFS) ? rawLoudnessDb : null;
 
@@ -364,6 +388,6 @@ export function computeFeatureSet(
     wordsPerLast30Sec: stats.wordsPerLast30Sec(),
     totalSyllablesSession: stats.totalNucleiCount,
     totalWordsSession: stats.totalNucleiCount / C.SYLLABLES_PER_WORD,
-    loudnessVariabilityDb: stats.windowedLoudnessStdDb(),
+    loudnessVariabilityDb: stats.windowedLoudnessStdDb(windowStart, windowEnd, openKind, openStart, openEnd),
   };
 }

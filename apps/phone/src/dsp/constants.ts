@@ -12,7 +12,15 @@ export const STFT_FRAME_SIZE = 512; // 32ms @ 16kHz
 export const STFT_HOP_SIZE = 256; // 50% overlap, COLA-compatible with a Hann window
 
 export const NOISE_UPDATE_PERCENTILE = 20.0;
-export const NOISE_OVERSUBTRACTION_FACTOR = 1.5;
+// Raised from 1.5 (root-cause noise rejection, item 2): more aggressively
+// subtracts the estimated stationary noise spectrum from every frame before
+// VAD/pitch/nuclei ever see it, instead of just tightening downstream
+// thresholds against noise that's still present in the signal.
+// NOISE_SPECTRAL_FLOOR is intentionally left unchanged -- it's what keeps
+// this from ever fully crushing genuine speech toward silence/musical-noise
+// artifacts, which would otherwise also break the (now pre-AGC, see
+// preprocessing.ts) loudness measurement.
+export const NOISE_OVERSUBTRACTION_FACTOR = 1.8;
 export const NOISE_SPECTRAL_FLOOR = 0.05;
 export const NOISE_ESTIMATE_SMOOTHING = 0.9;
 
@@ -22,13 +30,17 @@ export const AGC_MAX_GAIN = 6.0;
 export const AGC_SMOOTHING = 0.85;
 
 // --- VAD ---
+// ENERGY_MARGIN_DB/ZCR_MAX/ONSET_FRAMES all tightened (item 2, root-cause):
+// require a bigger, more sustained gap above the tracked noise floor before
+// confirming "this is speech" at all, rather than accepting borderline
+// frames and hoping downstream feature gating catches the difference.
 export const VAD_FRAME_MS = 20.0;
 export const VAD_HOP_MS = 10.0;
-export const VAD_ENERGY_MARGIN_DB = 10.0;
-export const VAD_ZCR_MAX = 0.6;
+export const VAD_ENERGY_MARGIN_DB = 14.0;
+export const VAD_ZCR_MAX = 0.5;
 export const VAD_NOISE_FLOOR_PERCENTILE = 15.0;
 export const VAD_NOISE_FLOOR_WINDOW_SEC = 3.0;
-export const VAD_ONSET_FRAMES = 2;
+export const VAD_ONSET_FRAMES = 3;
 export const VAD_HANGOVER_FRAMES = 5;
 
 // --- Segmentation ---
@@ -124,13 +136,16 @@ export const WORDS_PER_30SEC_NORMAL_MIN = 50;
 export const WORDS_PER_30SEC_NORMAL_MAX = 73;
 export const WORDS_PER_30SEC_TACHYLALIA_THRESHOLD = WORDS_PER_30SEC_NORMAL_MAX;
 
-// --- Loudness alert (Part G) ---
+// --- Tone (loudness) alert (Part G, item 5) ---
 // The app's loudnessDb is real dBFS (0 = digital full scale, so readings
-// are <= 0 -- see features.ts's windowedLoudnessDb doc comment), but the
-// product spec's threshold ("65") is stated as an absolute dB-SPL-style
-// value, matching the clinical convention that ~65dB SPL is a raised/loud
-// speaking voice. There's no per-device mic calibration to convert dBFS to
-// true SPL, so this offset is a fixed approximation (dBSPL ~= dBFS +
+// are <= 0), computed pre-AGC (see preprocessing.ts's
+// StreamingSpectralDenoiser.process() doc comment -- AGC normalizes RMS
+// toward a fixed target, which would otherwise erase the loud-vs-quiet
+// variation this alert exists to detect). The product spec's threshold
+// ("65") is stated as an absolute dB-SPL-style value, matching the
+// clinical convention that ~65dB SPL is a raised/loud speaking voice.
+// There's no per-device mic calibration to convert dBFS to true SPL, so
+// this offset is a fixed approximation (dBSPL ~= dBFS +
 // LOUDNESS_SPL_OFFSET_DB) applied only for this alert's threshold check --
 // it does not change the dBFS value shown on the Loudness param card.
 export const LOUDNESS_SPL_OFFSET_DB = 100;

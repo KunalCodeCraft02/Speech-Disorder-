@@ -15,7 +15,7 @@ import { estimatePitchContour, voicedTimesArray, type PitchFrame } from './pitch
 import { AudioPreprocessor } from './preprocessing';
 import { SpeechSegmenter } from './segmentation';
 import { detectSyllableNuclei } from './syllables';
-import { VoiceActivityDetector } from './vad';
+import { VoiceActivityDetector, type FrameDecision } from './vad';
 
 const ABNORMAL: Classification[] = ['tachylalia'];
 
@@ -28,6 +28,35 @@ function roundOrNull(value: number | null, digits: number): number | null {
 function round(value: number, digits: number): number {
   const f = 10 ** digits;
   return Math.round(value * f) / f;
+}
+
+/**
+ * Item 2/8 root-cause fix: syllables.ts's nuclei detection only requires a
+ * candidate to correlate with pitch-autocorrelation voicing
+ * (NUCLEI_REQUIRE_VOICING), which is a DIFFERENT detector than VAD's own
+ * energy+ZCR speech/silence decision -- background noise that fools the
+ * pitch tracker into reporting "voiced" (e.g. a hum or another person's
+ * distant speech with periodic structure) could register as a syllable
+ * even on a window VAD never confirmed as this speaker's active speech,
+ * quietly inflating articulationRate/wordsPerLast30Sec/totalSyllables from
+ * noise alone. Requiring VAD confirmation too closes that gap: `t` must
+ * fall inside (or within one VAD hop of) a frame VAD itself confirmed as
+ * speech. `frameDecisions` is assumed time-sorted ascending (true for
+ * RunningStats.recentFrameDecisions, which is only ever appended to).
+ */
+function isVadConfirmedNear(t: number, frameDecisions: FrameDecision[], hopSeconds: number): boolean {
+  if (frameDecisions.length === 0) return false;
+  let lo = 0;
+  let hi = frameDecisions.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (frameDecisions[mid].time <= t) lo = mid + 1;
+    else hi = mid;
+  }
+  const idx = lo - 1;
+  if (idx < 0) return false;
+  const frame = frameDecisions[idx];
+  return frame.isSpeech && t - frame.time <= hopSeconds * 2;
 }
 
 export interface MetricsFrame {
@@ -77,7 +106,7 @@ export interface MetricsFrame {
   meanPitchTrendHz: number | null;
   timeInAbnormalStateSec: number;
   recoveryTimeSec: number | null;
-  /** Part A: false when this window has (near-)zero VAD-confirmed phonation -- articulationRateSPS/averageSyllableDurationSec/interSyllableIntervalSec/meanPitchHz/loudnessDb are all held at their last valid reading rather than freshly computed, and pitch/loudness alerts must not fire for this window (see usePitchAlert.ts/useLoudnessAlert.ts). */
+  /** Part A: false when this window has (near-)zero VAD-confirmed phonation -- articulationRateSPS/averageSyllableDurationSec/interSyllableIntervalSec/meanPitchHz/loudnessDb are all held at their last valid reading rather than freshly computed, and the tone alert must not fire for this window (see useToneAlert.ts). */
   livePhonationActive: boolean;
 }
 
@@ -175,7 +204,7 @@ export class SessionPipeline {
     if (samples.length === 0) return null;
 
     this.totalSamplesIn += samples.length;
-    const processedNew = this.preprocessor.process(samples);
+    const { audio: processedNew, loudnessSamples } = this.preprocessor.process(samples);
 
     if (processedNew.length) {
       this.appendProcessed(processedNew);
@@ -185,6 +214,7 @@ export class SessionPipeline {
         this.stats.addSegments(newSegments, this.windowSec, this.elapsedSec);
         this.stats.addFrameDecisions(decisions, this.windowSec);
       }
+      this.stats.addLoudnessSamples(loudnessSamples, this.windowSec);
     }
 
     const elapsed = this.elapsedSec;
@@ -313,9 +343,10 @@ export class SessionPipeline {
     const voicedTimes = voicedTimesArray(pitchFrames);
 
     const candidateNuclei = detectSyllableNuclei(windowAudio, this.sampleRate, windowStartTime, voicedTimes);
+    const vadConfirmedNuclei = candidateNuclei.filter((t) => isVadConfirmedNear(t, this.stats.recentFrameDecisions, this.vad.hopSeconds));
 
     const acceptBefore = windowEndTime - C.NUCLEI_BOUNDARY_GUARD_SEC;
-    const newNuclei = this.acceptNewNuclei(candidateNuclei, acceptBefore);
+    const newNuclei = this.acceptNewNuclei(vadConfirmedNuclei, acceptBefore);
 
     this.stats.addNuclei(newNuclei, this.windowSec, elapsed);
 
@@ -446,7 +477,7 @@ function analyzeClip(pcmFloat: Float32Array, sampleRate: number, baseline: Basel
   const segmenter = new SpeechSegmenter();
   const stats = new RunningStats();
 
-  const processed = preprocessor.process(pcmFloat);
+  const { audio: processed, loudnessSamples } = preprocessor.process(pcmFloat);
   const elapsed = pcmFloat.length / sampleRate;
   let pitchFrames: PitchFrame[] = [];
 
@@ -457,10 +488,12 @@ function analyzeClip(pcmFloat: Float32Array, sampleRate: number, baseline: Basel
       stats.addSegments(segments, elapsed + 1.0, elapsed);
       stats.addFrameDecisions(decisions, elapsed + 1.0);
     }
+    stats.addLoudnessSamples(loudnessSamples, elapsed + 1.0);
 
     pitchFrames = estimatePitchContour(processed, sampleRate);
     const voicedTimes = voicedTimesArray(pitchFrames);
-    const nuclei = detectSyllableNuclei(processed, sampleRate, 0, voicedTimes);
+    const candidateNuclei = detectSyllableNuclei(processed, sampleRate, 0, voicedTimes);
+    const nuclei = candidateNuclei.filter((t) => isVadConfirmedNear(t, stats.recentFrameDecisions, vad.hopSeconds));
     stats.addNuclei(nuclei, elapsed + 1.0, elapsed);
   }
 

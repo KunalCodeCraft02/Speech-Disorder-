@@ -12,10 +12,10 @@ function Tile({ label, value }: { label: string; value: string }) {
 }
 
 /**
- * Extra session diagnostics not covered by the 10 param cards (ParamGrid) —
- * decision audit (confidence/sample gate), trend, and cumulative counters.
- * Collapsed by default so the Main screen stays focused on the ring + the
- * 10 cards.
+ * Extra session diagnostics not covered by the main-screen param cards
+ * (ParamGrid) — decision audit (confidence/sample gate), trend, and
+ * cumulative counters. Collapsed by default so the Main screen stays
+ * focused on the ring + the top-level cards.
  *
  * Disfluency rate / repetition rate / false starts have no DSP computation
  * anywhere in this app's pipeline -- there is no transcription/ASR stage,
@@ -42,9 +42,11 @@ export function SecondaryMetricsPanel({ frame }: { frame: MetricsFrame | null })
           <Tile label="composite_z" value={formatMetric(frame?.compositeZ)} />
           <Tile label="Confidence" value={formatPercent(frame ? frame.confidence * 100 : null)} />
           <Tile label="Sample OK" value={frame?.sampleSufficient == null ? NA : frame.sampleSufficient ? 'Yes' : 'No'} />
-          {/* Moved off the main ParamGrid (Part H) -- still computed live and feeding compositeZ/classification exactly as before, just no longer a top-level card. */}
+          {/* Moved off the main ParamGrid (Part H, item 6) -- all four still computed live and feeding compositeZ/classification exactly as before, just no longer top-level cards. */}
           <Tile label="Syllable Duration" value={formatMetric(frame?.averageSyllableDurationSec, 3, ' s')} />
           <Tile label="Inter-Syllable Int." value={formatMetric(frame?.interSyllableIntervalSec, 3, ' s')} />
+          <Tile label="Pause Duration" value={formatMetric(frame?.pauseDurationSec, 2, ' s')} />
+          <Tile label="Pause Frequency" value={formatMetric(frame?.pauseFrequencyPerMin, 1, ' /min')} />
           <Tile label="Rate Trend" value={formatMetric(frame?.rateTrend, 3)} />
           <Tile label="Composite Score" value={formatMetric(frame?.compositeScore, 0)} />
           <Tile label="Recovery Time" value={formatMetric(frame?.recoveryTimeSec, 1, ' s')} />

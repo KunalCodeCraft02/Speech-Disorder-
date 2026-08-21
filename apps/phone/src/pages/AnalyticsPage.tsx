@@ -80,7 +80,7 @@ export function AnalyticsPage() {
             title="Loudness"
             unit="dBFS"
             color="var(--color-loudness)"
-            domain={[-45, 0]}
+            domain={[-60, 0]}
             points={seriesFor(history, (f) => f.loudnessDb)}
             baselineMean={calibration?.baselineLoudnessDb ?? null}
             baselineStd={calibration?.baselineLoudnessStd ?? null}

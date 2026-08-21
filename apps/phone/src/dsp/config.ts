@@ -10,11 +10,9 @@ export interface Settings {
   minEmitIntervalSec: number;
   warmupSec: number;
 
+  /** Cosmetic only (item 1/7 removed these as a gate on `classification`/triggerFeedback, which now update immediately from `raw` every sample-sufficient window -- see classifier.ts's update()). Still feeds confidence's `progress` term: how many consecutive same-raw windows, and how long continuously, the current raw label has held. */
   hysteresisWindows: number;
-  /** Minimum continuous real-time (wall-clock, not emit-count) a raw label must persist before it's confirmed -- see classifier.ts. Guards against frame-to-frame flapping independently of how often analyze() happens to emit. */
   hysteresisSustainSec: number;
-  /** EMA smoothing factor (0-1, higher = more responsive/less smoothed) applied to compositeZ before it's compared against zTachylalia, so a single loud/fast burst inside an otherwise normal window can't cross the threshold on its own. */
-  compositeZSmoothingAlpha: number;
 
   minSyllablesPerWindow: number;
   minPhonationSecPerWindow: number;
@@ -22,17 +20,10 @@ export interface Settings {
   zTachylalia: number;
   baselineStdFloor: number;
 
-  /** Tone/pitch alert: |zPitch| threshold (already personal-std-normalized -- see classifier.ts) and how long it must stay sustained before the (vibration-free) toast fires. */
-  toneAlertZThreshold: number;
+  /** Tone alert: fixed absolute loudness threshold (constants.ts's LOUDNESS_ALERT_DBFS_THRESHOLD -- not personal-baseline-relative), not pitch (removed per the pitch->loudness-only redesign). How long it must stay sustained during actual VAD-confirmed speech before it fires, and its own cooldown -- independent of the main tachylalia alert's cooldown/refractory. */
   toneAlertSustainSec: number;
-  toneAlertSmoothingAlpha: number;
   toneAlertCooldownSec: number;
   toneAlertToastVisibleSec: number;
-
-  /** Loudness alert (Part G): fixed absolute threshold (not personal-baseline-relative), how long it must stay sustained during actual VAD-confirmed speech before it fires, and its own cooldown -- independent of both the tone alert's and the main tachylalia alert's cooldowns. */
-  loudnessAlertSustainSec: number;
-  loudnessAlertCooldownSec: number;
-  loudnessAlertToastVisibleSec: number;
 
   // Population defaults — used only if a caller explicitly opts into a
   // demo/no-calibration baseline. There is no "demoMode" fallback wired
@@ -73,15 +64,13 @@ export const settings: Settings = {
   minEmitIntervalSec: 0.5,
   warmupSec: 1.0,
 
-  // A raw label must both (a) win `hysteresisWindows` consecutive analyze()
-  // emits AND (b) have held continuously for `hysteresisSustainSec` of real
-  // recording time before it's confirmed -- (b) is what actually prevents
-  // flapping, since emits fire every `minEmitIntervalSec` (0.5s) and 3 of
-  // those is only 1.5s of wall-clock confirmation on its own, too fast for
-  // a "sustained pattern" classification to feel stable.
+  // Cosmetic-only (see the Settings interface doc comment above) --
+  // confidence's `progress` term ramps up over `hysteresisWindows`
+  // consecutive same-raw emits and `hysteresisSustainSec` of continuous
+  // real time, but neither gates the classification or vibration
+  // themselves anymore.
   hysteresisWindows: 3,
   hysteresisSustainSec: 3.0,
-  compositeZSmoothingAlpha: 0.35,
 
   // Loosened from the original 4 syll / 1.5s: normal conversational speech
   // pauses within a 4s trailing window often left less than 1.5s of actual
@@ -102,31 +91,28 @@ export const settings: Settings = {
   // that z_pause is properly windowed and no longer contributes that
   // spurious lift, 1.0 (rate-only now needs ~1.7 sigma alone) is reachable
   // by a real, moderately-fast, sustained reading without going back to
-  // flagging everyday variation -- hysteresisWindows/hysteresisSustainSec/
-  // compositeZSmoothingAlpha are unchanged, so a single fast burst still
-  // can't trigger on its own via condition_1. (condition_2 in
-  // classifier.ts -- wordsPerLast30Sec > the population upper bound -- is
-  // an independent, non-z-score trigger; see constants.ts's
-  // WORDS_PER_30SEC_TACHYLALIA_THRESHOLD.) Tunable: change this constant to
-  // retune sensitivity, and validate against real session data before
-  // treating a new value as final.
+  // flagging everyday variation. (condition_2 in classifier.ts --
+  // wordsPerLast30Sec > the population upper bound -- is an independent,
+  // non-z-score trigger; see constants.ts's
+  // WORDS_PER_30SEC_TACHYLALIA_THRESHOLD.) Note this now compares against
+  // THIS window's own raw compositeZ, not an EMA of it (item 1 -- the alert
+  // must fire on the window the threshold is actually crossed), so a single
+  // sample-sufficient window genuinely can trigger condition_1 on its own;
+  // the anti-false-trigger guard against noise is now upstream, in
+  // sampleSufficient (this window must actually have real phonation) and
+  // preprocessing.ts/vad.ts/sessionPipeline.ts's noise/VAD-confirmation
+  // gating (item 2/8), not temporal smoothing of the decision. Tunable:
+  // change this constant to retune sensitivity, and validate against real
+  // session data before treating a new value as final.
   zTachylalia: 1.0,
   baselineStdFloor: 0.15,
 
-  // |zPitch| already divides by the patient's own calibrated pitch std
-  // (with a floor), so this tolerance is inherently personalized -- 1.5
-  // sigma is a real, noticeable deviation, not everyday pitch wobble.
-  toneAlertZThreshold: 1.5,
   toneAlertSustainSec: 3.0,
-  toneAlertSmoothingAlpha: 0.35,
-  // Independent of the main tachylalia alert's (edge-triggered) vibration
-  // so the two can never spam simultaneously or be mistaken for one another.
+  // Independent of the main tachylalia alert's own refractory cadence
+  // (FEEDBACK_REFRACTORY_SEC) so the two can never be mistaken for one
+  // another -- distinct vibration patterns too, see haptics.ts.
   toneAlertCooldownSec: 6.0,
   toneAlertToastVisibleSec: 4.0,
-
-  loudnessAlertSustainSec: 3.0,
-  loudnessAlertCooldownSec: 6.0,
-  loudnessAlertToastVisibleSec: 4.0,
 
   defaultBaselineArticulationRate: 4.4,
   defaultBaselineArticulationRateStd: 0.6,

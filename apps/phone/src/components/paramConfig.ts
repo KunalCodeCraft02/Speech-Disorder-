@@ -1,23 +1,16 @@
-// The 10 monitored parameters (Part B/C/D) — one entry per param card,
-// shared by the Main screen's ParamGrid and (for baseline bands) the
-// Analytics tab. `feedsComposite` is display metadata only: it never
-// changes how a card is colored, it just labels which 3 params actually
-// drive compositeZ/TACHYLALIA so a red card on a `feedsComposite: false`
-// param is legible as "unusual, not a trigger."
+// The main-screen monitored parameters (Part B/C/D) — one entry per param
+// card, shared by the Main screen's ParamGrid and (for baseline bands) the
+// Analytics tab. Pause Duration and Pause Frequency were removed from this
+// grid (item 6) -- both are still computed (features.ts/classifier.ts) and
+// shown in SecondaryMetricsPanel's detailed view. `feedsComposite` is
+// display metadata only: it never changes how a card is colored, it just
+// labels which 3 params actually drive compositeZ/TACHYLALIA so a red card
+// on a `feedsComposite: false` param is legible as "unusual, not a
+// trigger."
 import type { MetricsFrame } from '../dsp/sessionPipeline';
 import * as C from '../dsp/constants';
 
-export type ParamKey =
-  | 'rate'
-  | 'pause'
-  | 'wpm'
-  | 'words30'
-  | 'pauseDuration'
-  | 'pauseFrequency'
-  | 'ipuLength'
-  | 'pitch'
-  | 'loudness'
-  | 'voiceActivity';
+export type ParamKey = 'rate' | 'pause' | 'wpm' | 'words30' | 'ipuLength' | 'pitch' | 'loudness' | 'voiceActivity';
 
 export interface ParamDef {
   key: ParamKey;
@@ -90,26 +83,6 @@ export const PARAMS: ParamDef[] = [
     },
   },
   {
-    key: 'pauseDuration',
-    label: 'Pause Duration',
-    shortLabel: 'Pause Dur.',
-    unit: 's',
-    digits: 2,
-    feedsComposite: false,
-    value: (f) => f.pauseDurationSec,
-    z: (f) => f.zPauseDuration,
-  },
-  {
-    key: 'pauseFrequency',
-    label: 'Pause Frequency',
-    shortLabel: 'Pause Freq.',
-    unit: '/min',
-    digits: 1,
-    feedsComposite: false,
-    value: (f) => f.pauseFrequencyPerMin,
-    z: (f) => f.zPauseFrequency,
-  },
-  {
     key: 'ipuLength',
     label: 'IPU Length',
     shortLabel: 'IPU Length',
@@ -133,10 +106,10 @@ export const PARAMS: ParamDef[] = [
     key: 'loudness',
     label: 'Loudness',
     shortLabel: 'Loudness',
-    // dBFS-style relative energy level from the VAD's frame energy
-    // estimate (0 dBFS ~= digital full scale), not a calibrated
-    // microphone-relative SPL reading -- see features.ts's
-    // windowedLoudnessDb() doc comment.
+    // Pre-AGC dBFS-style relative energy (0 dBFS ~= digital full scale),
+    // not a calibrated microphone-relative SPL reading -- see
+    // preprocessing.ts's StreamingSpectralDenoiser.process() and
+    // features.ts's windowedLoudnessDb() doc comments.
     unit: 'dBFS',
     digits: 1,
     feedsComposite: false,

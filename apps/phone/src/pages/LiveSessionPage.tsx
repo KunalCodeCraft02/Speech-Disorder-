@@ -3,8 +3,7 @@ import clsx from 'clsx';
 import { Link } from 'react-router-dom';
 import { useSessionContext } from '../context/SessionContext';
 import { useCalibrationProfile } from '../hooks/useCalibrationProfile';
-import { usePitchAlert } from '../hooks/usePitchAlert';
-import { useLoudnessAlert } from '../hooks/useLoudnessAlert';
+import { useToneAlert } from '../hooks/useToneAlert';
 import { StatusPill } from '../components/StatusPill';
 import { ClassificationBadge } from '../components/ClassificationBadge';
 import { ParamGrid } from '../components/ParamGrid';
@@ -41,16 +40,17 @@ function NavPill({ to, label, disabled, accent }: { to: string; label: string; d
 }
 
 /**
- * Main screen: classification ring + confidence, the 10 param cards, and
+ * Main screen: classification ring + confidence, the param cards, and
  * Start/Stop -- no charts here (those live in the Analytics tab, which
  * reads the same shared session subscription via SessionContext so
- * switching tabs mid-recording doesn't restart capture).
+ * switching tabs mid-recording doesn't restart capture). Pause Duration
+ * and Pause Frequency were removed from this grid (item 6) -- both are
+ * still computed and shown in SecondaryMetricsPanel's detailed view.
  */
 export function LiveSessionPage() {
   const session = useSessionContext();
   const { profile: calibration } = useCalibrationProfile();
-  const pitchAlert = usePitchAlert(session.latest);
-  const loudnessAlert = useLoudnessAlert(session.latest);
+  const toneAlert = useToneAlert(session.latest);
 
   const [flashActive, setFlashActive] = useState(false);
   useEffect(() => {
@@ -155,8 +155,7 @@ export function LiveSessionPage() {
         </button>
       </div>
 
-      <Toast message={pitchAlert.toastMessage} onDismiss={pitchAlert.dismiss} />
-      <Toast message={loudnessAlert.toastMessage} onDismiss={loudnessAlert.dismiss} bottomClassName="bottom-40" />
+      <Toast message={toneAlert.toastMessage} onDismiss={toneAlert.dismiss} />
     </div>
   );
 }

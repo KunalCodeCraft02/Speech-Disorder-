@@ -1,8 +1,11 @@
-// Hysteresis classification state machine. Ported from
+// Classification state machine. Ported from
 // services/dsp-service/app/pipeline/classifier.py — tachylalia-only:
 // bradylalia, disorderMode scoping, and Z_BRADYLALIA/
 // HYSTERESIS_WINDOWS_BRADYLALIA are all removed, since a session can now
-// only ever monitor speaking-too-fast.
+// only ever monitor speaking-too-fast. The class name/file are kept as
+// "hysteresis" for continuity with that port, but `classification` is no
+// longer hysteresis-delayed relative to `raw` -- see Step 2's comment in
+// update() (item 7: the ring must never lag behind the vibration trigger).
 
 import * as C from './constants';
 import type { Settings } from './config';
@@ -11,8 +14,8 @@ import type { BaselineProfile } from './baseline';
 export type Classification = 'uncalibrated' | 'normal' | 'tachylalia';
 
 export interface ClassificationResult {
-  classification: Classification; // confirmed (hysteresis-passed) state
-  raw: Classification; // this window's raw label, pre-hysteresis
+  classification: Classification; // == raw for a sample-sufficient window (see update()); carried forward unchanged when a window is skipped
+  raw: Classification; // this window's raw label
   confidence: number;
   triggerFeedback: boolean;
   feedbackReason: Classification | null;
@@ -53,14 +56,14 @@ export class HysteresisClassifier {
   private readonly settings: Settings;
   private readonly requiredWindows: number;
   private readonly sustainSec: number;
-  private readonly smoothingAlpha: number;
 
   private confirmed: Classification = 'normal';
+  /** Cosmetic-only now (item 1/7): feeds confidence's `progress` term, but no longer gates when `confirmed`/triggerFeedback update -- see the Step 1/2 comments below for why the previous multi-window/multi-second hysteresis delay was removed. */
   private rawCounters: Record<Classification, number> = { uncalibrated: 0, normal: 0, tachylalia: 0 };
   private lastConfidence = 0;
 
-  /** EMA of compositeZ (Part 17/1): a single fast/loud burst inside an otherwise normal window shouldn't be able to cross zTachylalia on its own -- only a sustained elevation should. */
-  private smoothedCompositeZ: number | null = null;
+  /** Last window's raw (unsmoothed) compositeZ, kept only so the reported `compositeZ` display field doesn't repeat the identical stale number when a window is skipped -- see Step 1: the DECISION itself now always uses this window's own raw compositeZ, not an EMA of it. */
+  private lastCompositeZ: number | null = null;
   private rawStreakLabel: Classification | null = null;
   private rawStreakStartTime: number | null = null;
 
@@ -71,7 +74,6 @@ export class HysteresisClassifier {
     this.settings = settings;
     this.requiredWindows = Math.max(1, requiredWindows ?? settings.hysteresisWindows);
     this.sustainSec = Math.max(0, settings.hysteresisSustainSec);
-    this.smoothingAlpha = Math.min(1, Math.max(0, settings.compositeZSmoothingAlpha));
   }
 
   update(args: {
@@ -189,20 +191,16 @@ export class HysteresisClassifier {
         zRate,
         zPause,
         zSyll,
-        // Report the last smoothed reading rather than this (unreliable,
-        // low-sample) window's raw compositeZ, so the displayed value
+        // Report the last real reading rather than this (unreliable,
+        // low-sample) window's fresh compositeZ, so the displayed value
         // doesn't jump around during a low-phonation window.
-        compositeZ: this.smoothedCompositeZ ?? compositeZ,
+        compositeZ: this.lastCompositeZ ?? compositeZ,
         ...displayZs,
         sampleSufficient: false,
       };
     }
 
-    // Smooth compositeZ (EMA) before it's used for the decision -- only on
-    // sample-sufficient windows, since a low-syllable window's compositeZ
-    // is itself a noisy estimate not worth folding in.
-    this.smoothedCompositeZ = this.smoothedCompositeZ === null ? compositeZ : this.smoothedCompositeZ + this.smoothingAlpha * (compositeZ - this.smoothedCompositeZ);
-    const smoothedCompositeZ = this.smoothedCompositeZ;
+    this.lastCompositeZ = compositeZ;
 
     // --- Step 1: raw label (Part D) ---
     // Two independent conditions, either sufficient on its own:
@@ -214,16 +212,23 @@ export class HysteresisClassifier {
     //     patient's calibration -- catches a patient whose own baseline is
     //     already fast, where condition_1 alone could stay quiet even at a
     //     genuinely abnormal absolute rate.
-    const condition1 = baseline.isPersonal ? smoothedCompositeZ > settings.zTachylalia : articulationRate > baseline.tachylaliaThreshold;
+    //
+    // Item 1: condition_1 uses THIS window's own raw compositeZ, not an EMA
+    // of it -- an EMA-smoothed value takes several windows (seconds) to
+    // catch up to a real step change, which was exactly the "still buzzes
+    // noticeably late" bug. The EMA's original purpose (a single noisy
+    // window can't cross the threshold alone) is now covered upstream
+    // instead: sampleSufficient (above) already requires a real amount of
+    // speech in this window, and preprocessing.ts/vad.ts's strengthened
+    // noise rejection (item 2) means a noise-only window is far less likely
+    // to produce an inflated rate/z in the first place.
+    const condition1 = baseline.isPersonal ? compositeZ > settings.zTachylalia : articulationRate > baseline.tachylaliaThreshold;
     const condition2 = wordsPerLast30Sec > C.WORDS_PER_30SEC_TACHYLALIA_THRESHOLD;
     const raw: Classification = condition1 || condition2 ? 'tachylalia' : 'normal';
 
-    // --- Step 2: hysteresis confirmation ---
-    // Two independent guards against flapping: `requiredWindows` consecutive
-    // same-raw emits (as before), AND the raw label must have held
-    // continuously for `sustainSec` of real recording time -- emits fire
-    // every ~0.5s, so a pure emit-count floor alone confirms a state change
-    // in as little as ~1.5s, too fast to read as "sustained."
+    // Streak bookkeeping kept purely for confidence's `progress` term below
+    // (item 1/7: it no longer gates `confirmed`/triggerFeedback -- see Step
+    // 2).
     (Object.keys(this.rawCounters) as Classification[]).forEach((label) => {
       this.rawCounters[label] = label === raw ? this.rawCounters[label] + 1 : 0;
     });
@@ -233,16 +238,24 @@ export class HysteresisClassifier {
       this.rawStreakStartTime = currentTime;
     }
     const sustainedSec = this.rawStreakStartTime !== null ? currentTime - this.rawStreakStartTime : 0;
-
     const progress = Math.min(1, Math.min(this.rawCounters[raw] / this.requiredWindows, this.sustainSec > 0 ? sustainedSec / this.sustainSec : 1));
 
-    if (this.rawCounters[raw] >= this.requiredWindows && sustainedSec >= this.sustainSec && this.confirmed !== raw) {
-      this.confirmed = raw;
-    }
+    // --- Step 2: classification update (item 7) ---
+    // `confirmed` (the ring/badge) now updates unconditionally to `raw`
+    // every sample-sufficient window -- the SAME window and the SAME `raw`
+    // value that Step 4 below uses to decide the vibration. Previously
+    // `confirmed` only changed after `requiredWindows` consecutive
+    // same-raw emits AND `sustainSec` of continuous real time, while
+    // Step 4's trigger fired immediately -- that mismatch was exactly the
+    // "ring stays Normal for a period after TACHYLALIA is confirmed and
+    // vibration has already fired" bug. There is deliberately no separate,
+    // delayed confirmation path left: ring and vibration are two views of
+    // the same `raw` value in the same call.
+    this.confirmed = raw;
 
-    // --- Step 3: confidence --- (uses the smoothed composite so one noisy
-    // window can't also swing confidence, matching the decision above)
-    const direction = raw === 'tachylalia' ? 1 : smoothedCompositeZ >= 0 ? 1 : -1;
+    // --- Step 3: confidence --- (still uses the streak/progress signal
+    // above as one input, but that no longer blocks classification itself)
+    const direction = raw === 'tachylalia' ? 1 : compositeZ >= 0 ? 1 : -1;
     const components = [zRate, zPause, zSyll];
     const agreeing = components.filter((z) => z * direction > 0).length;
     const corroboration = agreeing / 3;
@@ -255,22 +268,19 @@ export class HysteresisClassifier {
         0,
         C.CONFIDENCE_WEIGHT_PROGRESS * progress +
           C.CONFIDENCE_WEIGHT_CORROBORATION * corroboration +
-          C.CONFIDENCE_WEIGHT_COMPOSITE_Z * Math.min(1, Math.abs(smoothedCompositeZ) / C.CONFIDENCE_COMPOSITE_Z_SCALE) +
+          C.CONFIDENCE_WEIGHT_COMPOSITE_Z * Math.min(1, Math.abs(compositeZ) / C.CONFIDENCE_COMPOSITE_Z_SCALE) +
           C.CONFIDENCE_WEIGHT_SAMPLE * sampleFactor
       )
     );
     this.lastConfidence = confidence;
 
     // --- Step 4: feedback (vibration) trigger (Part F) ---
-    // Deliberately decoupled from Step 2's hysteresis-confirmed `this.confirmed`
-    // (which still gates the displayed classification badge, for visual
-    // stability) -- the alert instead follows `raw` directly, so it fires on
-    // the FIRST window where condition_1 OR condition_2 is true, not after
-    // hysteresisWindows/hysteresisSustainSec's ~1.5-3s wait. While `raw`
-    // stays 'tachylalia', it re-fires every FEEDBACK_REFRACTORY_SEC rather
-    // than only once per episode; `lastFeedbackFireTime` resets on any
-    // 'normal' window so the next abnormal onset is immediate again, not
-    // throttled by a stale cooldown from a prior episode.
+    // Fires on the FIRST window where condition_1 OR condition_2 is true
+    // (same `raw`, same window as Step 2's classification update above --
+    // item 7), then re-fires every FEEDBACK_REFRACTORY_SEC while `raw`
+    // stays 'tachylalia'; `lastFeedbackFireTime` resets on any 'normal'
+    // window so the next abnormal onset is immediate again, not throttled
+    // by a stale cooldown from a prior episode.
     let trigger = false;
     if (raw === 'tachylalia') {
       if (this.lastFeedbackFireTime === null || currentTime - this.lastFeedbackFireTime >= C.FEEDBACK_REFRACTORY_SEC) {
@@ -291,7 +301,7 @@ export class HysteresisClassifier {
       zRate,
       zPause,
       zSyll,
-      compositeZ: smoothedCompositeZ,
+      compositeZ,
       ...displayZs,
       sampleSufficient: true,
     };

@@ -1,18 +1,16 @@
-// Native haptics wrapper for the tachylalia (speech-rate) alert only.
+// Native haptics wrapper for the app's two device alerts: the tachylalia
+// (speech-rate) alert and the tone (loudness) alert -- item 10 requires
+// these be distinguishable by feel alone, so each gets its own, physically
+// different pattern (see mainAlertHaptic vs. toneAlertHaptic below).
 // navigator.vibrate() is unreliable inside a Capacitor WebView on real
 // devices -- Capacitor's Haptics plugin talks to the platform's native
 // haptic engine directly and is the reliable path. Falls back to
 // navigator.vibrate() on the web (Capacitor.isNativePlatform() is false
 // there), and finally to a synthesized beep + visual pulse if neither is
 // available (e.g. iOS Safari with vibrate unsupported).
-//
-// Pitch/tone feedback must never vibrate the device (toast-only, see
-// usePitchAlert.ts) -- this module intentionally exposes no tone/pitch
-// entry point, so there is nothing here for that alert to accidentally
-// call into.
 
 import { Capacitor } from '@capacitor/core';
-import { Haptics, NotificationType } from '@capacitor/haptics';
+import { Haptics } from '@capacitor/haptics';
 
 // The alert must be clearly felt, not a quick tap -- a continuous buzz
 // comfortably over the 2s floor.
@@ -23,13 +21,12 @@ const VIBRATE_SUPPORTED = typeof navigator !== 'undefined' && typeof navigator.v
 let inFlight = false;
 
 /**
- * Tachylalia alert: one continuous ~2.2s vibration. The classifier's
- * triggerFeedback is strictly edge-triggered (fires once on the
- * NORMAL->TACHYLALIA transition, not again until a return to normal and a
- * fresh transition -- see classifier.ts Step 4) so this can't be re-fired
- * while the condition stays continuously abnormal; `inFlight` is a
- * defensive second guard so even a caller bug can't stack two overlapping
- * vibrate() calls into one another.
+ * Tachylalia alert: one continuous ~2.2s vibration -- kept as-is (item 10
+ * says keep this pattern unchanged). The classifier fires triggerFeedback
+ * immediately on the first abnormal window, then re-fires every
+ * FEEDBACK_REFRACTORY_SEC while it stays abnormal (see classifier.ts Step
+ * 4); `inFlight` guards against two overlapping vibrate() calls stacking
+ * if a re-fire lands before the previous ~2.2s pulse has finished.
  *
  * Returns false if neither native Haptics nor navigator.vibrate fired, so
  * the caller can fall back to the beep+visual pulse.
@@ -54,22 +51,36 @@ export async function mainAlertHaptic(): Promise<boolean> {
   }
 }
 
+// Item 10: two very quick short pulses, clearly different by feel from the
+// tachylalia alert's single ~2.2s continuous buzz above.
+const TONE_ALERT_PULSE_MS = 90;
+const TONE_ALERT_GAP_MS = 110;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
- * Loudness alert (Part G): a distinct, short native "notification" haptic
- * (not the continuous tachylalia buzz) -- deliberately a different
- * Capacitor Haptics call (`notification` vs. `vibrate`) so the two alerts
- * are physically distinguishable on-device, matching their separate
- * cooldowns (see useLoudnessAlert.ts). No `inFlight` guard here: unlike the
- * main alert this is a brief, non-overlapping native effect, and the
- * hook's own loudnessAlertCooldownSec already prevents rapid re-firing.
+ * Tone (loudness) alert: two short vibration pulses separated by a brief
+ * gap -- distinct from the tachylalia alert's one long continuous buzz
+ * (mainAlertHaptic above), so the two are distinguishable by feel alone
+ * per item 10. Native: two sequential Haptics.vibrate({duration}) calls
+ * with an awaited gap between them (Capacitor's Haptics plugin has no
+ * built-in multi-pulse pattern API). Web: navigator.vibrate() natively
+ * accepts a [pulse, gap, pulse] pattern array in one call. No `inFlight`
+ * guard here: unlike the main alert this is a brief, non-overlapping
+ * effect, and the hook's own toneAlertCooldownSec already prevents rapid
+ * re-firing.
  */
-export async function loudnessAlertHaptic(): Promise<boolean> {
+export async function toneAlertHaptic(): Promise<boolean> {
   if (Capacitor.isNativePlatform()) {
-    await Haptics.notification({ type: NotificationType.Warning });
+    await Haptics.vibrate({ duration: TONE_ALERT_PULSE_MS });
+    await delay(TONE_ALERT_GAP_MS);
+    await Haptics.vibrate({ duration: TONE_ALERT_PULSE_MS });
     return true;
   }
   if (VIBRATE_SUPPORTED) {
-    navigator.vibrate(200);
+    navigator.vibrate([TONE_ALERT_PULSE_MS, TONE_ALERT_GAP_MS, TONE_ALERT_PULSE_MS]);
     return true;
   }
   return false;
