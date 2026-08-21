@@ -205,7 +205,7 @@ export const WORDS_PER_30SEC_NORMAL_MAX = 74;
 // against) while speaking at a normal conversational volume vs. genuinely
 // raising your voice, and set this value a few dB above the normal
 // reading and a few dB below the loud one.
-export const LOUDNESS_THRESHOLD_DBFS = -33.0;
+export const LOUDNESS_THRESHOLD_DBFS = -20.0;
 
 // --- Sanity bounds (Part C) ---
 // A residual DSP bug must never be able to put a physically implausible
