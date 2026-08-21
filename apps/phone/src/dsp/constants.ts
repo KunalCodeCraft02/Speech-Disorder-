@@ -146,11 +146,14 @@ export const FEEDBACK_EPISODE_GAP_TOLERANCE_SEC = 1.5;
 // own calibrated baselineWordsPer30Sec/-Std, see baseline.ts) against the
 // SAME config.ts zTachylalia margin condition_1 uses (item 1: "the gap
 // above the patient's calibrated baseline," for both conditions,
-// configurable in one place).
+// configurable in one place). MAX values nudged down slightly (item 4,
+// ~5%) so the displayed reference range stays consistent with the
+// direction of the zTachylalia retune above -- a small adjustment, not a
+// large drop.
 export const WPM_NORMAL_MIN = 100;
-export const WPM_NORMAL_MAX = 145;
+export const WPM_NORMAL_MAX = 138;
 export const WORDS_PER_30SEC_NORMAL_MIN = 50;
-export const WORDS_PER_30SEC_NORMAL_MAX = 73;
+export const WORDS_PER_30SEC_NORMAL_MAX = 69;
 
 // --- Tone (loudness) alert (Part G, item 2/5) ---
 // The app's loudnessDb is real dBFS (0 = digital full scale, so readings

@@ -173,6 +173,23 @@ export class RunningStats {
    * windowedPhonationSec uses), not from the loudness samples' own
    * amplitude, so a loud noise burst that VAD never confirmed as speech
    * can't contribute a reading.
+   *
+   * Item 3 root-cause: a "speech" segment (VAD-confirmed at the segment
+   * level, with MIN_PAUSE_SEC hysteresis) still contains genuine
+   * near-silent micro-moments -- unvoiced consonants, the brief gap between
+   * syllables -- where this particular denoiser hop's reconstructed RMS is
+   * close to true zero, producing an extreme outlier reading (well below
+   * -100dB, sometimes near -200dB). Samples below
+   * LOUDNESS_REALISTIC_MIN_DBFS are filtered out here, before any
+   * averaging: they aren't valid "how loud is the voice" readings to begin
+   * with, and including even one in a linear-dB average drags the whole
+   * window's result down far enough to fail computeFeatureSet's own sanity
+   * bound -- which is what was making loudnessDb (and therefore the tone
+   * alert, which depends on it) permanently null/N/A. (AGC-normalized
+   * loudness never hit this bug because AGC's own compression kept
+   * individual frame readings within a narrow range -- switching to
+   * pre-AGC readings for genuine loud-vs-quiet variation reintroduced the
+   * wide dynamic range that exposes it.)
    */
   private windowedSpeechLoudnessValues(windowStart: number, windowEnd: number, openKind: SegmentKind, openStart: number, openEnd: number): number[] {
     const inSpeech = (t: number): boolean => {
@@ -181,7 +198,9 @@ export class RunningStats {
       }
       return openKind === 'speech' && t >= openStart && t < openEnd;
     };
-    return this.recentLoudnessSamples.filter((s) => s.time >= windowStart && s.time <= windowEnd && inSpeech(s.time)).map((s) => s.db);
+    return this.recentLoudnessSamples
+      .filter((s) => s.time >= windowStart && s.time <= windowEnd && inSpeech(s.time) && s.db >= C.LOUDNESS_REALISTIC_MIN_DBFS)
+      .map((s) => s.db);
   }
 
   /**
@@ -192,10 +211,22 @@ export class RunningStats {
    * feed the tone alert during silence. The caller (sessionPipeline.ts)
    * holds the last valid reading forward when this is null, rather than
    * displaying/alerting on a null.
+   *
+   * Averaged in the linear power domain, not naive dB arithmetic (item 3):
+   * dB is already logarithmic, so directly averaging dB values is not the
+   * same as averaging the underlying energy -- a straight arithmetic mean
+   * over/under-weights outliers relative to true average loudness. Since
+   * this codebase's dB convention is amplitude-based (20*log10(rms), see
+   * preprocessing.ts), the linear quantity is `10**(db/20)`; converting to
+   * power (`10**(db/10)`, i.e. squared amplitude) before averaging and back
+   * with `10*log10(...)` is the standard, correct way to average RMS/energy
+   * readings expressed in that convention.
    */
   windowedLoudnessDb(windowStart: number, windowEnd: number, openKind: SegmentKind, openStart: number, openEnd: number): number | null {
     const values = this.windowedSpeechLoudnessValues(windowStart, windowEnd, openKind, openStart, openEnd);
-    return values.length ? mean(values) : null;
+    if (!values.length) return null;
+    const avgPower = mean(values.map((db) => 10 ** (db / 10)));
+    return 10 * Math.log10(Math.max(avgPower, C.EPS));
   }
 
   windowedLoudnessStdDb(windowStart: number, windowEnd: number, openKind: SegmentKind, openStart: number, openEnd: number): number {

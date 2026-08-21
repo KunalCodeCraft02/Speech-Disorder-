@@ -99,15 +99,18 @@ export const settings: Settings = {
   // History: was progressively LOWERED (2.0 -> 1.4 -> 1.1 -> 1.0) across
   // earlier tuning passes chasing under-sensitivity, but 1.0 combined with
   // per-window (unsmoothed) evaluation proved too trigger-happy on real
-  // calibrated-normal speech -- widened back to 2.0 (item 1) to sit further
-  // above baseline. The anti-false-trigger guard against noise is upstream
-  // (sampleSufficient + preprocessing.ts/vad.ts/sessionPipeline.ts's
-  // noise/VAD-confirmation gating, item 2/8), not this margin -- widen or
-  // narrow this specifically to tune how far a genuine, sustained deviation
-  // from the patient's own baseline must go before it counts as abnormal,
-  // and validate against real session data before treating a new value as
-  // final.
-  zTachylalia: 2.0,
+  // calibrated-normal speech -- widened to 2.0, which then over-corrected
+  // the other direction (patient had to speak unrealistically fast to
+  // trigger at all). 1.5 sits at the midpoint: a smaller margin than 2.0,
+  // but well clear of the 1.0 that proved too sensitive. The
+  // anti-false-trigger guard against noise is upstream (sampleSufficient +
+  // preprocessing.ts/vad.ts/sessionPipeline.ts's noise/VAD-confirmation
+  // gating, item 2/8), not this margin -- widen or narrow this specifically
+  // to tune how far a genuine, sustained deviation from the patient's own
+  // baseline must go before it counts as abnormal, and validate against
+  // real session data (normal-pace AND genuinely-fast recordings) before
+  // treating a new value as final.
+  zTachylalia: 1.5,
   baselineStdFloor: 0.15,
 
   toneAlertSustainSec: 3.0,
