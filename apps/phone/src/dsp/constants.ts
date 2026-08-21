@@ -195,16 +195,16 @@ export const WORDS_PER_30SEC_NORMAL_MAX = 74;
 // commit): a calibrated-normal speaking baseline landed around -37dBFS,
 // well above the old -55 cutoff, so the tone alert was firing on
 // essentially all speech regardless of actual loudness, not just genuinely
-// loud stretches. -33.0 restores real separation between normal and loud
-// speech in that synthetic test (clean margin held from -36 down to -28:
-// calibrated-normal speech landed a comfortable ~4dB under the cutoff,
-// genuinely loud speech a comfortable ~10dB over it), but the exact number
-// is inherently device/mic/room dependent and MUST be confirmed on a real
-// device per the classification engine's testing checklist: read the live
-// Loudness param card's dBFS (same units this constant is compared
-// against) while speaking at a normal conversational volume vs. genuinely
-// raising your voice, and set this value a few dB above the normal
-// reading and a few dB below the loud one.
+// loud stretches. A synthetic test first landed on -33.0 (clean margin
+// between calibrated-normal and genuinely-loud speech in that synthetic
+// signal), but the exact number is inherently device/mic/room dependent;
+// -20.0 is the value confirmed via the classification engine's testing
+// checklist against a real device -- read the live Loudness param card's
+// dBFS (same units this constant is compared against) while speaking at a
+// normal conversational volume vs. genuinely raising your voice, and set
+// this value a few dB above the normal reading and a few dB below the
+// loud one. Moves the trigger further from typical normal-speaking-volume
+// readings, toward genuinely loud speech only.
 export const LOUDNESS_THRESHOLD_DBFS = -20.0;
 
 // --- Sanity bounds (Part C) ---

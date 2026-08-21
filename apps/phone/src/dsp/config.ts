@@ -124,24 +124,22 @@ export const settings: Settings = {
   // baseline must go before it counts as abnormal, and validate against
   // real session data (normal-pace AND genuinely-fast recordings) before
   // treating a new value as final.
-  // Left at 1.5 (not retuned this round) -- but flagging a finding from the
-  // synthetic-harness testing done for the loudness-threshold/
-  // minPhonationSecPerWindow changes above: even on near-noiseless
-  // synthetic calibrated-normal speech (no background noise, no VAD/noise
-  // leniency involved), per-window unsmoothed compositeZ/zWordsPer30Sec
-  // occasionally crossed 1.5 from ordinary window-to-window rate jitter
-  // alone -- a handful of false tachylalia triggers per 30s clip,
-  // independent of minPhonationSecPerWindow (reproduced identically at
-  // both 1.0s and 0.65s). This looks like the expected false-positive rate
-  // of evaluating a ~1.5-sigma one-sided cutoff fresh every ~0.5s window
-  // with no smoothing, not a noise-subtraction/VAD issue -- real speech's
-  // baseline std may well be larger than the synthetic generator's,
-  // making this a non-issue in practice, but if the item-7 real-recording
-  // pass shows spurious buzzes on (b)/(c) with no more culprits left
-  // upstream, this margin (or reintroducing light smoothing on compositeZ)
-  // is the next place to look, despite being told to leave it alone this
-  // round.
-  zTachylalia: 1.5,
+  // Lowered 1.5 -> 0.6: shrinks the gap between a patient's calibrated
+  // syll/s baseline and the trigger threshold, so detection fires closer
+  // to their normal rate. Flagging the same finding noted at 1.5 (see the
+  // History paragraph above) applies with more force at 0.6: even
+  // near-noiseless synthetic calibrated-normal speech occasionally crossed
+  // 1.5 from ordinary window-to-window rate jitter alone (a handful of
+  // false tachylalia triggers per 30s clip) -- a ~0.6-sigma one-sided
+  // cutoff evaluated fresh every ~0.5s window with no smoothing is a much
+  // lower bar, and synthetic-harness testing after this change showed
+  // substantially more frequent false triggers on calibrated-normal
+  // speech as a direct result (see the retune commit for the actual
+  // observed compositeZ readings). Real speech's baseline std may still
+  // differ enough from the synthetic generator's to change this in
+  // practice -- validate against real session data before treating this
+  // as final.
+  zTachylalia: 0.6,
   baselineStdFloor: 0.15,
 
   toneAlertSustainSec: 3.0,
