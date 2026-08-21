@@ -123,15 +123,45 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Item 8: "confirm echoCancellation/noiseSuppression/autoGainControl are
+ * actually being honored, not silently ignored" -- getUserMedia() silently
+ * DOWNGRADES unsupported constraints rather than rejecting the call, so
+ * requesting them (IDEAL_CONSTRAINTS above) is not proof they're active.
+ * MediaStreamTrack.getSettings() reports what the platform actually
+ * applied; logging it is the only way to verify this on a real device
+ * without an extra UI surface -- visible via `adb logcat -s
+ * chromium:I` (same channel describeMicErrorVerbose's diagnostics already
+ * use) right after Start.
+ */
+function logAppliedAudioConstraints(stream: MediaStream): void {
+  const track = stream.getAudioTracks()[0];
+  if (!track) return;
+  const settings = track.getSettings();
+  console.info(
+    '[mic] applied audio constraints:',
+    `echoCancellation=${settings.echoCancellation ?? 'unsupported'}`,
+    `noiseSuppression=${settings.noiseSuppression ?? 'unsupported'}`,
+    `autoGainControl=${settings.autoGainControl ?? 'unsupported'}`,
+    `channelCount=${settings.channelCount ?? 'unknown'}`,
+    `sampleRate=${settings.sampleRate ?? 'unknown'}`,
+    `deviceId=${settings.deviceId ?? 'unknown'}`
+  );
+}
+
 export async function openMicStream(): Promise<MediaStream> {
   try {
-    return await navigator.mediaDevices.getUserMedia({ audio: IDEAL_CONSTRAINTS });
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: IDEAL_CONSTRAINTS });
+    logAppliedAudioConstraints(stream);
+    return stream;
   } catch (err) {
     if (!isRecoverable(err)) throw err;
   }
 
   try {
-    return await navigator.mediaDevices.getUserMedia({ audio: MINIMAL_CONSTRAINTS });
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: MINIMAL_CONSTRAINTS });
+    logAppliedAudioConstraints(stream);
+    return stream;
   } catch (err) {
     if (!isRecoverable(err)) throw err;
   }
@@ -139,7 +169,9 @@ export async function openMicStream(): Promise<MediaStream> {
   let lastErr: unknown;
   for (let attempt = 0; attempt <= BUSY_RETRY_DELAYS_MS.length; attempt++) {
     try {
-      return await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      logAppliedAudioConstraints(stream);
+      return stream;
     } catch (err) {
       lastErr = err;
       if (!isMicBusyError(err)) throw err;

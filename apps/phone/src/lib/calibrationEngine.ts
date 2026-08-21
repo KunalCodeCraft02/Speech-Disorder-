@@ -58,6 +58,7 @@ export async function runCalibration(userId: string, clips: Array<{ samples: Flo
     meanPitchSamples: clipResults.flatMap((c) => c.meanPitchSamples),
     loudnessSamples: clipResults.flatMap((c) => c.loudnessSamples),
     voiceActivitySamples: clipResults.flatMap((c) => c.voiceActivitySamples),
+    speechRateWpmSamples: clipResults.flatMap((c) => c.speechRateWpmSamples),
   });
 
   const now = new Date().toISOString();

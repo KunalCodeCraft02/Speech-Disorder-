@@ -2,6 +2,7 @@ package com.speechbiofeedback.app;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
@@ -25,14 +26,25 @@ import com.getcapacitor.BridgeActivity;
  */
 public class MainActivity extends BridgeActivity {
   private static final int RECORD_AUDIO_REQUEST_CODE = 7001;
+  private static final int POST_NOTIFICATIONS_REQUEST_CODE = 7002;
 
   @Override
   public void onCreate(Bundle savedInstanceState) {
     registerPlugin(HeadsetAudioPlugin.class);
+    registerPlugin(RecordingServicePlugin.class);
     super.onCreate(savedInstanceState);
 
     if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
       ActivityCompat.requestPermissions(this, new String[] { Manifest.permission.RECORD_AUDIO }, RECORD_AUDIO_REQUEST_CODE);
+    }
+
+    // Item 7: needed to show RecordingForegroundService's persistent
+    // notification on Android 13+ -- without this grant the foreground
+    // service itself still runs (keeping mic access + the process alive),
+    // but its required notification would silently fail to post, losing
+    // the "still monitoring" reassurance the notification exists for.
+    if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+      ActivityCompat.requestPermissions(this, new String[] { Manifest.permission.POST_NOTIFICATIONS }, POST_NOTIFICATIONS_REQUEST_CODE);
     }
 
     getBridge().getWebView().setWebChromeClient(new WebChromeClient() {

@@ -3,10 +3,10 @@ import type { MetricsFrame } from '../dsp/sessionPipeline';
 import { formatMetric, NA } from '../lib/formatMetric';
 import { PARAMS, tierForZ, type Tier } from './paramConfig';
 
-// Tier signal is carried by `ring` (box-shadow, layers cleanly over the
-// glass-surface-raised class's own border/background) plus the dot/text
-// color -- not by overriding glass-surface-raised's border-color, which
-// would fight CSS cascade order against a plain Tailwind border-* utility.
+// Item 6: two-color only when calibrated -- 'normal' is neutral/white
+// (ring, dot, AND number text all follow the same rule, no amber/middle
+// state), 'abnormal' is red across all three. 'uncalibrated' stays its own
+// distinct grey state (a "no baseline yet" fact, not a value reading).
 const TIER_STYLE: Record<Tier, { ring: string; dot: string; text: string }> = {
   uncalibrated: {
     ring: '',
@@ -15,13 +15,8 @@ const TIER_STYLE: Record<Tier, { ring: string; dot: string; text: string }> = {
   },
   normal: {
     ring: '',
-    dot: 'bg-[var(--color-good)]',
+    dot: 'bg-[var(--color-ink-muted)]',
     text: 'text-[var(--color-ink)]',
-  },
-  elevated: {
-    ring: 'ring-1 ring-[var(--color-warning)]/40',
-    dot: 'bg-[var(--color-warning)]',
-    text: 'text-[var(--color-warning)]',
   },
   abnormal: {
     ring: 'ring-1 ring-[var(--color-critical)]/50',
@@ -31,12 +26,15 @@ const TIER_STYLE: Record<Tier, { ring: string; dot: string; text: string }> = {
 };
 
 /**
- * All 10 monitored params, each as its own card with current value + a
- * |z|-based color tier (Part D). This is purely a display surface: a red
- * (>= 2.0) tier on any of the 7 non-composite params means only "unusual
- * for this patient right now," never a TACHYLALIA trigger — only
- * compositeZ crossing Z_TACHYLALIA (computed upstream in the classifier)
- * does that, via the ring/badge elsewhere on this screen.
+ * The main-screen param cards, each with current value + a |z|-based
+ * two-color tier (item 6): |z| >= settings.zTachylalia -> red on the card
+ * AND the number, otherwise neutral/white on both -- no amber/elevated
+ * state. This is purely a display surface: a red tier on any
+ * `feedsComposite: false` param means only "unusual for this patient right
+ * now, at the same margin that WOULD trigger TACHYLALIA if this were
+ * compositeZ or zWordsPer30Sec," never a trigger by itself -- only those
+ * two crossing zTachylalia (computed upstream in the classifier) actually
+ * confirms TACHYLALIA, via the ring/badge elsewhere on this screen.
  */
 export function ParamGrid({ frame, calibrated }: { frame: MetricsFrame | null; calibrated: boolean }) {
   return (
@@ -45,7 +43,7 @@ export function ParamGrid({ frame, calibrated }: { frame: MetricsFrame | null; c
         const value = frame ? param.value(frame) : null;
         const z = frame ? param.z(frame) : 0;
         const active = calibrated && frame != null && frame.classification !== 'uncalibrated';
-        const tier = active ? (param.tier ? param.tier(frame as MetricsFrame) : tierForZ(z, true)) : 'uncalibrated';
+        const tier = tierForZ(z, active);
         const style = TIER_STYLE[tier];
         const displayValue = formatMetric(value, param.digits);
         const hasValue = displayValue !== NA;

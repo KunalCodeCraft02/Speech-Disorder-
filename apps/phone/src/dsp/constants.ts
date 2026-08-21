@@ -100,6 +100,8 @@ export const IPU_LENGTH_STD_FLOOR = 0.3;
 export const MEAN_PITCH_STD_FLOOR = 5.0;
 export const LOUDNESS_STD_FLOOR = 2.0;
 export const VOICE_ACTIVITY_STD_FLOOR = 5.0;
+/** Item 1/6: floor for zWordsPer30Sec's denominator (words/30s units, same scale as WORDS_PER_30SEC_NORMAL_MIN/MAX below). */
+export const WORDS_PER_30SEC_STD_FLOOR = 4.0;
 
 export const EPS = 1e-10;
 
@@ -118,39 +120,55 @@ export const MIN_ELAPSED_FOR_ZERO_METRIC_SEC = 2.0;
 // freshly-computed reading).
 export const MIN_LIVE_PHONATION_SEC = 0.05;
 
-// --- Feedback (vibration) cadence (Part F) ---
+// --- Feedback (vibration) cadence (Part F, item 3/4) ---
 // Gap between repeated tachylalia-alert firings while the patient stays
 // continuously abnormal. The FIRST firing on a normal->abnormal transition
 // is immediate (no hysteresis wait) -- this only throttles re-fires after
 // that.
 export const FEEDBACK_REFRACTORY_SEC = 4.0;
+// Item 3/4: how much real time a raw label can dip below threshold and
+// still count as "the same episode" for cooldown-reset purposes -- without
+// this, noisy oscillation right at the boundary (crossing back and forth
+// within a second or two) resets the cooldown on every single dip below
+// threshold, so the very next crossing back above fires an immediate
+// re-buzz instead of respecting the refractory gap. A genuine return to
+// normal that holds for longer than this DOES reset the cooldown, so the
+// next real onset still fires immediately rather than being throttled by a
+// stale timer from a previous episode. Applies to both the tachylalia
+// alert (classifier.ts) and the tone alert (useToneAlert.ts).
+export const FEEDBACK_EPISODE_GAP_TOLERANCE_SEC = 1.5;
 
-// --- Dual-threshold detection (Part D) ---
-// Population-level normal reference ranges, independent of the patient's
-// personal calibration. WORDS_PER_30SEC_TACHYLALIA_THRESHOLD is
-// condition_2's trigger: wordsPerLast30Sec above this alone is sufficient
-// to raise TACHYLALIA, regardless of composite_z.
+// --- Dual-threshold detection (Part D, item 1/6) ---
+// WPM_NORMAL_MIN/MAX and WORDS_PER_30SEC_NORMAL_MIN/MAX are population
+// reference ranges, shown for context on the calibration screen -- purely
+// descriptive now. condition_2 itself no longer compares against these:
+// it's zWordsPer30Sec (wordsPerLast30Sec measured against the patient's
+// own calibrated baselineWordsPer30Sec/-Std, see baseline.ts) against the
+// SAME config.ts zTachylalia margin condition_1 uses (item 1: "the gap
+// above the patient's calibrated baseline," for both conditions,
+// configurable in one place).
 export const WPM_NORMAL_MIN = 100;
 export const WPM_NORMAL_MAX = 145;
 export const WORDS_PER_30SEC_NORMAL_MIN = 50;
 export const WORDS_PER_30SEC_NORMAL_MAX = 73;
-export const WORDS_PER_30SEC_TACHYLALIA_THRESHOLD = WORDS_PER_30SEC_NORMAL_MAX;
 
-// --- Tone (loudness) alert (Part G, item 5) ---
+// --- Tone (loudness) alert (Part G, item 2/5) ---
 // The app's loudnessDb is real dBFS (0 = digital full scale, so readings
 // are <= 0), computed pre-AGC (see preprocessing.ts's
 // StreamingSpectralDenoiser.process() doc comment -- AGC normalizes RMS
 // toward a fixed target, which would otherwise erase the loud-vs-quiet
-// variation this alert exists to detect). The product spec's threshold
-// ("65") is stated as an absolute dB-SPL-style value, matching the
-// clinical convention that ~65dB SPL is a raised/loud speaking voice.
-// There's no per-device mic calibration to convert dBFS to true SPL, so
-// this offset is a fixed approximation (dBSPL ~= dBFS +
-// LOUDNESS_SPL_OFFSET_DB) applied only for this alert's threshold check --
-// it does not change the dBFS value shown on the Loudness param card.
-export const LOUDNESS_SPL_OFFSET_DB = 100;
-export const LOUDNESS_ALERT_SPL_THRESHOLD = 65;
-export const LOUDNESS_ALERT_DBFS_THRESHOLD = LOUDNESS_ALERT_SPL_THRESHOLD - LOUDNESS_SPL_OFFSET_DB;
+// variation this alert exists to detect).
+//
+// This used to be derived from a separate "65 dB SPL"-style number via a
+// +100dB fixed offset approximation -- that indirection was confusing (the
+// configured "65" wasn't the same number as what the Loudness card
+// actually shows) and, worse, the resulting -35dBFS cutoff was far louder
+// than this app's real observed signal ever reaches (~-59dBFS at genuinely
+// loud speech on real-device testing), so the alert could never fire.
+// LOUDNESS_THRESHOLD_DBFS is now a single, direct cutoff in the exact same
+// units/scale as the Loudness param card -- no conversion, what you see on
+// the card is what's compared against this number.
+export const LOUDNESS_THRESHOLD_DBFS = -55.0;
 
 // --- Sanity bounds (Part C) ---
 // A residual DSP bug must never be able to put a physically implausible

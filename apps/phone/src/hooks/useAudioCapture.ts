@@ -29,6 +29,7 @@ export function useAudioCapture({ onChunk }: UseAudioCaptureOptions) {
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const chunkerRef = useRef<PCMChunker | null>(null);
+  const visibilityCleanupRef = useRef<(() => void) | null>(null);
 
   // Worklet callbacks bind once per start(); keep the latest onChunk
   // without needing to tear the audio graph down every render.
@@ -38,6 +39,9 @@ export function useAudioCapture({ onChunk }: UseAudioCaptureOptions) {
   }, [onChunk]);
 
   const stop = useCallback(() => {
+    visibilityCleanupRef.current?.();
+    visibilityCleanupRef.current = null;
+
     chunkerRef.current?.flush();
     chunkerRef.current = null;
 
@@ -85,6 +89,20 @@ export function useAudioCapture({ onChunk }: UseAudioCaptureOptions) {
 
       const worklet = new AudioWorkletNode(audioContext, 'pcm-capture-processor');
       workletNodeRef.current = worklet;
+
+      // Item 7: some Android WebView versions auto-suspend an AudioContext
+      // when the page goes hidden (backgrounded/screen-locked) as a power
+      // -saving measure, even for a capture-only graph never connected to
+      // `destination`. RecordingForegroundService.java's foreground grant
+      // keeps the mic itself and JS execution alive, but if the context
+      // still gets suspended this resumes it the moment the page becomes
+      // visible again (foreground) or immediately if it's already visible
+      // -- cheap and a no-op when the context was never suspended.
+      const resumeIfSuspended = () => {
+        if (audioContext.state === 'suspended') void audioContext.resume();
+      };
+      document.addEventListener('visibilitychange', resumeIfSuspended);
+      visibilityCleanupRef.current = () => document.removeEventListener('visibilitychange', resumeIfSuspended);
 
       const chunker = new PCMChunker((samples) => onChunkRef.current(samples));
       chunkerRef.current = chunker;

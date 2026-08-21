@@ -33,6 +33,18 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- Item 7: keeps mic capture + DSP + classification + alerts
+             running while the app is backgrounded/screen-locked -- see
+             RecordingForegroundService.java's doc comment. Must declare
+             foregroundServiceType="microphone" (Android 14/targetSdk 34+
+             throws at startForeground() otherwise) and stay a private,
+             non-exported component (only this app's own JS, via
+             RecordingServicePlugin, ever starts/stops it). -->
+        <service
+            android:name=".RecordingForegroundService"
+            android:foregroundServiceType="microphone"
+            android:exported="false" />
     </application>
 
     <!-- Permissions -->
@@ -53,6 +65,17 @@
          permission; without it declared, mic capture fails outright with
          NotReadableError even though RECORD_AUDIO is granted. -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <!-- Item 7: background operation. FOREGROUND_SERVICE is required on
+         Android 9+ to start any foreground service at all;
+         FOREGROUND_SERVICE_MICROPHONE is the type-specific grant Android
+         14+ additionally requires for a foreground service that holds the
+         microphone (RecordingForegroundService.java); POST_NOTIFICATIONS
+         is the Android 13+ runtime permission needed to actually show that
+         service's persistent notification (requested in MainActivity.java). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- No server calls are made after first install (the app is fully
          offline-first), but Capacitor's WebView plumbing and the

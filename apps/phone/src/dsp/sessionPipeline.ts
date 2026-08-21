@@ -71,6 +71,7 @@ export interface MetricsFrame {
   zRate: number;
   zPause: number;
   zSyll: number;
+  zWordsPer30Sec: number;
   compositeZ: number;
   zInterSyllableInterval: number;
   zPauseDuration: number;
@@ -400,6 +401,7 @@ export class SessionPipeline {
       zRate: round(result.zRate, 3),
       zPause: round(result.zPause, 3),
       zSyll: round(result.zSyll, 3),
+      zWordsPer30Sec: round(result.zWordsPer30Sec, 3),
       compositeZ: round(result.compositeZ, 3),
       zInterSyllableInterval: round(result.zInterSyllableInterval, 3),
       zPauseDuration: round(result.zPauseDuration, 3),
@@ -460,6 +462,18 @@ export interface CalibrationClipResult {
   meanPitchSamples: number[];
   loudnessSamples: number[];
   voiceActivitySamples: number[];
+  /**
+   * Per-4s-subwindow speechRateWPM (item 1/6) -- the elapsed-time-normalized
+   * rate (includes pauses within the subwindow), NOT articulationRateSPS
+   * (phonation-time-only): a true wordsPerLast30Sec reading is a 30-SECOND
+   * WALL-CLOCK count that naturally includes pauses, so its personal
+   * baseline must be derived from the same elapsed-time-normalized basis,
+   * not a pure-phonation rate that would overestimate it. baseline.ts
+   * derives baselineWordsPer30Sec/-Std from these samples (divide by 2:
+   * 30s = half a minute) rather than needing a genuine 30s-ring-buffer
+   * sample, which a ~20s calibration clip can't produce anyway.
+   */
+  speechRateWpmSamples: number[];
   descriptive: {
     speechRateWPM: number;
     meanPitchHz: number | null;
@@ -530,6 +544,7 @@ export function analyzeCalibrationClip(pcmFloat: Float32Array, sampleRate: numbe
   const meanPitchSamples: number[] = [];
   const loudnessSamples: number[] = [];
   const voiceActivitySamples: number[] = [];
+  const speechRateWpmSamples: number[] = [];
 
   if (subLen > 0) {
     const nSub = Math.floor(pcmFloat.length / subLen);
@@ -552,6 +567,7 @@ export function analyzeCalibrationClip(pcmFloat: Float32Array, sampleRate: numbe
 
       if (subFeatures.averageSyllableDurationSec === null) continue;
       rateSamples.push(subFeatures.articulationRateSPS);
+      speechRateWpmSamples.push(subFeatures.speechRateWPM);
       syllSamples.push(subFeatures.averageSyllableDurationSec);
       if (subFeatures.speechToPauseRatio !== null) pauseSamples.push(subFeatures.speechToPauseRatio);
       if (subFeatures.interPausalUnitLengthSec !== null) ipuSamples.push(subFeatures.interPausalUnitLengthSec);
@@ -575,6 +591,7 @@ export function analyzeCalibrationClip(pcmFloat: Float32Array, sampleRate: numbe
     meanPitchSamples,
     loudnessSamples,
     voiceActivitySamples,
+    speechRateWpmSamples,
     descriptive: {
       speechRateWPM: round(wholeFeatures.speechRateWPM, 2),
       meanPitchHz: roundOrNull(wholeFeatures.meanPitchHz, 1),

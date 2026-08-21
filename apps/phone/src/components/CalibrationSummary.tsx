@@ -18,15 +18,13 @@ function Stat({ label, value, unit }: { label: string; value: string; unit?: str
 const fmt = formatMetric;
 
 export function CalibrationSummary({ profile }: { profile: CalibrationRecord }) {
-  // Part I: derive a personalized WPM alert threshold from this patient's
-  // calibrated baseline -- words/30sec is the primitive (half of WPM, by
-  // definition: 30s = half a minute), WPM is derived from it, and the
-  // threshold follows the same baseline*multiplier pattern as the existing
-  // (articulation-rate) tachylaliaThreshold below, just expressed in
-  // WPM/words-per-30s units for at-a-glance comparison against the
-  // population reference ranges.
-  const baselineWordsPer30Sec = profile.baselineSpeechRateWPM != null ? profile.baselineSpeechRateWPM / 2 : null;
-  const computedWpmThreshold = profile.baselineSpeechRateWPM != null ? profile.baselineSpeechRateWPM * settings.tachylaliaMultiplier : null;
+  // Item 1/6: condition_2's actual trigger point in real words/30s units --
+  // baselineWordsPer30Sec/-Std are now genuinely computed and stored from
+  // this patient's calibration (baseline.ts), and the margin above it is
+  // the SAME zTachylalia the ring/vibration decision and the two-color
+  // param cards use, so this number is exactly "how many words in 30s
+  // would actually trigger the alert," not an approximation.
+  const wordsPer30SecThreshold = profile.baselineWordsPer30Sec + settings.zTachylalia * profile.baselineWordsPer30SecStd;
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -57,18 +55,22 @@ export function CalibrationSummary({ profile }: { profile: CalibrationRecord }) 
           </span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-[var(--color-ink-muted)]">Computed WPM threshold</span>
-          <span className="tabular-nums font-medium text-[var(--color-critical)]">{fmt(computedWpmThreshold, 0)} wpm</span>
+          <span className="text-[var(--color-ink-muted)]">Words / 30s threshold</span>
+          <span className="tabular-nums font-medium text-[var(--color-critical)]">{fmt(wordsPer30SecThreshold, 0)}</span>
         </div>
         <div className="flex items-center justify-between">
           <span className="text-[var(--color-ink-muted)]">Words / 30s baseline</span>
-          <span className="tabular-nums font-medium text-[var(--color-ink)]">{fmt(baselineWordsPer30Sec, 0)}</span>
+          <span className="tabular-nums font-medium text-[var(--color-ink)]">{fmt(profile.baselineWordsPer30Sec, 0)}</span>
         </div>
         <div className="flex items-center justify-between">
           <span className="text-[var(--color-ink-muted)]">Loudness threshold</span>
-          <span className="tabular-nums font-medium text-[var(--color-ink)]">~{C.LOUDNESS_ALERT_SPL_THRESHOLD} dB SPL (fixed, all patients)</span>
+          <span className="tabular-nums font-medium text-[var(--color-ink)]">{fmt(C.LOUDNESS_THRESHOLD_DBFS, 0)} dBFS (fixed, all patients)</span>
         </div>
       </div>
+
+      <p className="text-center text-xs text-[var(--color-ink-muted)]">
+        Population reference ranges: {C.WPM_NORMAL_MIN}–{C.WPM_NORMAL_MAX} wpm, {C.WORDS_PER_30SEC_NORMAL_MIN}–{C.WORDS_PER_30SEC_NORMAL_MAX} words/30s
+      </p>
 
       <p className="text-center text-xs text-[var(--color-ink-muted)]">
         Calibrated from a {profile.durationSec ? Math.round(profile.durationSec) : 'N/A'}s reading

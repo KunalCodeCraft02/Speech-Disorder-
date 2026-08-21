@@ -20,7 +20,7 @@ export interface Settings {
   zTachylalia: number;
   baselineStdFloor: number;
 
-  /** Tone alert: fixed absolute loudness threshold (constants.ts's LOUDNESS_ALERT_DBFS_THRESHOLD -- not personal-baseline-relative), not pitch (removed per the pitch->loudness-only redesign). How long it must stay sustained during actual VAD-confirmed speech before it fires, and its own cooldown -- independent of the main tachylalia alert's cooldown/refractory. */
+  /** Tone alert: fixed absolute loudness threshold (constants.ts's LOUDNESS_THRESHOLD_DBFS -- not personal-baseline-relative), not pitch (removed per the pitch->loudness-only redesign). How long it must stay sustained during actual VAD-confirmed speech before it fires, and its own cooldown -- independent of the main tachylalia alert's cooldown/refractory. */
   toneAlertSustainSec: number;
   toneAlertCooldownSec: number;
   toneAlertToastVisibleSec: number;
@@ -50,6 +50,9 @@ export interface Settings {
   defaultBaselineLoudnessStd: number;
   defaultBaselineVoiceActivityPercent: number;
   defaultBaselineVoiceActivityStd: number;
+  /** Item 1/6: population fallback for condition_2's now-personalized baseline (used only pre-calibration/no-personal-std, same as the other defaultBaseline* fields). */
+  defaultBaselineWordsPer30Sec: number;
+  defaultBaselineWordsPer30SecStd: number;
 
   tachylaliaMultiplier: number;
 
@@ -79,32 +82,32 @@ export const settings: Settings = {
   minSyllablesPerWindow: 3,
   minPhonationSecPerWindow: 1.0,
 
-  // A single feature moving `zTachylalia` std devs on its own crosses
-  // compositeZ's weighted threshold at zTachylalia/weight sigma for that
-  // feature alone (e.g. rate-only at weight 0.6 needed ~3.3 sigma at the
-  // original zTachylalia=2.0 -- an unrealistically extreme, sustained rate
-  // increase). Progressively lowered (2.0 -> 1.4 -> 1.1 -> 1.0) to sit
-  // closer to the patient's own calibrated baseline: speechToPauseRatio
-  // used to be a session-cumulative ratio that could drift and inflate
-  // z_pause on its own (see features.ts's windowedPauseSec), which was
-  // quietly helping borderline-fast speech cross the higher thresholds; now
-  // that z_pause is properly windowed and no longer contributes that
-  // spurious lift, 1.0 (rate-only now needs ~1.7 sigma alone) is reachable
-  // by a real, moderately-fast, sustained reading without going back to
-  // flagging everyday variation. (condition_2 in classifier.ts --
-  // wordsPerLast30Sec > the population upper bound -- is an independent,
-  // non-z-score trigger; see constants.ts's
-  // WORDS_PER_30SEC_TACHYLALIA_THRESHOLD.) Note this now compares against
-  // THIS window's own raw compositeZ, not an EMA of it (item 1 -- the alert
-  // must fire on the window the threshold is actually crossed), so a single
-  // sample-sufficient window genuinely can trigger condition_1 on its own;
-  // the anti-false-trigger guard against noise is now upstream, in
-  // sampleSufficient (this window must actually have real phonation) and
-  // preprocessing.ts/vad.ts/sessionPipeline.ts's noise/VAD-confirmation
-  // gating (item 2/8), not temporal smoothing of the decision. Tunable:
-  // change this constant to retune sensitivity, and validate against real
-  // session data before treating a new value as final.
-  zTachylalia: 1.0,
+  // The single shared margin above the patient's calibrated baseline for
+  // BOTH trigger conditions (item 1/6):
+  //   condition_1: compositeZ > zTachylalia (this window's own raw
+  //     compositeZ, not smoothed -- the alert fires the window the
+  //     threshold is actually crossed, see classifier.ts's Step 1 comment)
+  //   condition_2: zWordsPer30Sec > zTachylalia (wordsPerLast30Sec
+  //     measured against the patient's own calibrated
+  //     baselineWordsPer30Sec/-Std -- see baseline.ts -- not the fixed
+  //     population number this used to be)
+  // This is also the exact cutoff the two-color param-card display uses
+  // (item 6: |z| >= zTachylalia -> red, otherwise neutral/white) -- one
+  // number drives both the decision and its own display, so they can never
+  // silently disagree.
+  //
+  // History: was progressively LOWERED (2.0 -> 1.4 -> 1.1 -> 1.0) across
+  // earlier tuning passes chasing under-sensitivity, but 1.0 combined with
+  // per-window (unsmoothed) evaluation proved too trigger-happy on real
+  // calibrated-normal speech -- widened back to 2.0 (item 1) to sit further
+  // above baseline. The anti-false-trigger guard against noise is upstream
+  // (sampleSufficient + preprocessing.ts/vad.ts/sessionPipeline.ts's
+  // noise/VAD-confirmation gating, item 2/8), not this margin -- widen or
+  // narrow this specifically to tune how far a genuine, sustained deviation
+  // from the patient's own baseline must go before it counts as abnormal,
+  // and validate against real session data before treating a new value as
+  // final.
+  zTachylalia: 2.0,
   baselineStdFloor: 0.15,
 
   toneAlertSustainSec: 3.0,
@@ -134,6 +137,11 @@ export const settings: Settings = {
   defaultBaselineLoudnessStd: 4,
   defaultBaselineVoiceActivityPercent: 60,
   defaultBaselineVoiceActivityStd: 10,
+  // Derived from defaultBaselineArticulationRate the same way
+  // baseline.ts derives a real patient's baselineWordsPer30Sec from their
+  // calibrated speechRateWPM (words/30s = WPM/2).
+  defaultBaselineWordsPer30Sec: (4.4 * 60) / 1.4 / 2,
+  defaultBaselineWordsPer30SecStd: (0.6 * 60) / 1.4 / 2,
 
   // Fallback-only (no personal std yet): 25% above the patient's own
   // measured baseline rate is a realistic "noticeably rushed" bar, vs. the

@@ -10,8 +10,8 @@ import { toneAlertHaptic } from '../lib/haptics';
  * param card, nothing more). Fires "Lower your tone" plus a distinct
  * two-pulse haptic (see haptics.ts's toneAlertHaptic, clearly different by
  * feel from the continuous tachylalia buzz) once loudnessDb has stayed
- * above LOUDNESS_ALERT_DBFS_THRESHOLD for toneAlertSustainSec, strictly
- * gated to actual VAD-confirmed speech (item 3/4):
+ * above LOUDNESS_THRESHOLD_DBFS for toneAlertSustainSec, strictly gated to
+ * actual VAD-confirmed speech:
  *
  *   if (!frame.livePhonationActive || frame.loudnessDb === null) -> never
  *   evaluate or fire this window at all. loudnessDb is held at its last
@@ -20,6 +20,17 @@ import { toneAlertHaptic } from '../lib/haptics';
  *   once the patient has actually stopped talking, nor fire on a
  *   currently-unavailable (null) reading.
  *
+ * Item 4 debounce (mirrors classifier.ts's Step 4 for the tachylalia
+ * alert): natural speech loudness fluctuates syllable-to-syllable, so a
+ * genuinely loud stretch will still have some individual windows dip
+ * momentarily below threshold. A single dip must not throw away the
+ * in-progress sustain accumulation (`sustainStartSecRef`) or force a
+ * fresh 3-second wait -- only once the reading has stayed genuinely below
+ * threshold for longer than FEEDBACK_EPISODE_GAP_TOLERANCE_SEC does the
+ * episode actually end. The repeat-fire cooldown (toneAlertCooldownSec)
+ * still throttles re-fires during one long sustained episode exactly as
+ * before -- this only fixes premature resets from momentary dips.
+ *
  * Its own independent cooldown (toneAlertCooldownSec) means this can fire
  * in the same session as the main tachylalia vibration without the two
  * cooldowns interacting.
@@ -27,6 +38,7 @@ import { toneAlertHaptic } from '../lib/haptics';
 export function useToneAlert(frame: MetricsFrame | null) {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const sustainStartSecRef = useRef<number | null>(null);
+  const lastAboveThresholdSecRef = useRef<number | null>(null);
   const lastFiredAtSecRef = useRef<number>(-Infinity);
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -41,24 +53,33 @@ export function useToneAlert(frame: MetricsFrame | null) {
   useEffect(() => {
     if (!frame || frame.classification === 'uncalibrated') {
       sustainStartSecRef.current = null;
+      lastAboveThresholdSecRef.current = null;
       return;
     }
 
     if (!frame.livePhonationActive || frame.loudnessDb === null) {
-      // Item 3/4: no VAD-confirmed speech this window, or no valid/current
-      // loudness reading -- never evaluate the threshold, and pause (don't
-      // just ignore) the sustain timer so a silence gap can't be silently
-      // bridged as "still sustained" once speech resumes.
+      // No VAD-confirmed speech this window, or no valid/current loudness
+      // reading -- never evaluate the threshold, and end the episode
+      // outright (silence is never "a brief dip," it's the patient not
+      // talking).
       sustainStartSecRef.current = null;
+      lastAboveThresholdSecRef.current = null;
       return;
     }
 
-    const exceeds = frame.loudnessDb > C.LOUDNESS_ALERT_DBFS_THRESHOLD;
-    if (!exceeds) {
-      sustainStartSecRef.current = null;
+    const exceeds = frame.loudnessDb > C.LOUDNESS_THRESHOLD_DBFS;
+    if (exceeds) {
+      lastAboveThresholdSecRef.current = frame.elapsedSec;
+      if (sustainStartSecRef.current === null) sustainStartSecRef.current = frame.elapsedSec;
+    } else {
+      const withinEpisodeGap =
+        lastAboveThresholdSecRef.current !== null && frame.elapsedSec - lastAboveThresholdSecRef.current < C.FEEDBACK_EPISODE_GAP_TOLERANCE_SEC;
+      if (!withinEpisodeGap) {
+        sustainStartSecRef.current = null;
+        lastAboveThresholdSecRef.current = null;
+      }
       return;
     }
-    if (sustainStartSecRef.current === null) sustainStartSecRef.current = frame.elapsedSec;
 
     const sustainedSec = frame.elapsedSec - sustainStartSecRef.current;
     if (sustainedSec < settings.toneAlertSustainSec) return;

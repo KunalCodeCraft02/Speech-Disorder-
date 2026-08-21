@@ -10,13 +10,14 @@ function seriesFor(history: MetricsFrame[], pick: (f: MetricsFrame) => number | 
 }
 
 /**
- * Real-time analytics: 5 live trend charts, no ring/Start/Stop (that's the
+ * Real-time analytics: Speech Rate, Pitch, and Loudness trend charts only
+ * (item 5 -- Pause and Voice Activity removed, single row so there's no
+ * empty gap; both metrics are still available live on the Main screen's
+ * param cards / SecondaryMetricsPanel), no ring/Start/Stop (that's the
  * Main screen's job). Reads the same session subscription as
  * LiveSessionPage via SessionContext -- no second mic/pipeline
  * subscription -- so it can be opened mid-session without interrupting
- * capture. Row grouping (3 then 2) matches the old apps/dashboard live
- * panel at wide viewports; on a phone-width screen it naturally stacks to
- * one column instead of cramming 3 charts into ~380px.
+ * capture.
  */
 export function AnalyticsPage() {
   const navigate = useNavigate();
@@ -54,7 +55,7 @@ export function AnalyticsPage() {
           </p>
         )}
 
-        {/* Row 1: Speech Rate, Pitch, Loudness */}
+        {/* Item 5: Speech Rate, Pitch, Loudness only -- one row, no second (previously half-empty) row */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <LiveTrendChart
             title="Speech Rate"
@@ -85,30 +86,6 @@ export function AnalyticsPage() {
             baselineMean={calibration?.baselineLoudnessDb ?? null}
             baselineStd={calibration?.baselineLoudnessStd ?? null}
             formatValue={(v) => v.toFixed(1)}
-          />
-        </div>
-
-        {/* Row 2: Pause, Voice Activity */}
-        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <LiveTrendChart
-            title="Pause"
-            unit="s"
-            color="var(--color-pause)"
-            domain={[0, 3]}
-            points={seriesFor(history, (f) => f.pauseDurationSec)}
-            baselineMean={calibration?.baselinePauseDurationSec ?? null}
-            baselineStd={calibration?.baselinePauseDurationStd ?? null}
-            formatValue={(v) => v.toFixed(2)}
-          />
-          <LiveTrendChart
-            title="Voice Activity"
-            unit="%"
-            color="var(--color-va)"
-            domain={[0, 100]}
-            points={seriesFor(history, (f) => f.voiceActivityPercent)}
-            baselineMean={calibration?.baselineVoiceActivityPercent ?? null}
-            baselineStd={calibration?.baselineVoiceActivityStd ?? null}
-            formatValue={(v) => v.toFixed(0)}
           />
         </div>
       </div>

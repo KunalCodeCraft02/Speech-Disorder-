@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { baselineFromStored } from '../dsp/baseline';
 import { settings } from '../dsp/config';
 import { SessionPipeline, type MetricsFrame } from '../dsp/sessionPipeline';
 import { playBeep } from '../lib/beep';
 import { mainAlertHaptic } from '../lib/haptics';
 import { describeMicErrorVerbose } from '../lib/micStream';
+import { RecordingService } from '../lib/recordingService';
 import { getCalibration } from '../storage/calibration';
 import { dateKeyFor, saveSession, type SessionSummary } from '../storage/sessions';
 import { useCurrentUser } from '../context/CurrentUserContext';
@@ -111,12 +113,21 @@ export function useLiveSession() {
     rateAccumRef.current = { sum: 0, count: 0 };
     setLatest(null);
     setRecordingState('recording');
+
+    // Item 7: start the Android foreground service so mic capture + DSP +
+    // classification + Haptics keep running once the app is backgrounded
+    // or the screen locks. Native-only -- there's no equivalent to start
+    // on web/dev, and the WebView already keeps running JS in the
+    // background there regardless (see RecordingForegroundService.java's
+    // doc comment).
+    if (Capacitor.isNativePlatform()) void RecordingService.start();
   }, [headset.connected, capture, recordingState, userId]);
 
   const stopRecording = useCallback(() => {
     if (recordingState !== 'recording') return;
     setRecordingState('stopping');
     capture.stop();
+    if (Capacitor.isNativePlatform()) void RecordingService.stop();
 
     const pipeline = pipelineRef.current;
     if (pipeline) {

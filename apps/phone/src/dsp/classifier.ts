@@ -32,6 +32,8 @@ export interface ClassificationResult {
   zPitch: number;
   zLoudness: number;
   zVoiceActivity: number;
+  /** Item 1/6: NOT display-only, unlike the seven above -- condition_2 is `zWordsPer30Sec > settings.zTachylalia`, the same margin condition_1 uses. */
+  zWordsPer30Sec: number;
   sampleSufficient: boolean;
 }
 
@@ -67,8 +69,10 @@ export class HysteresisClassifier {
   private rawStreakLabel: Classification | null = null;
   private rawStreakStartTime: number | null = null;
 
-  /** Part F: last time the (now decoupled-from-hysteresis) Haptics alert fired, for the FEEDBACK_REFRACTORY_SEC repeat-while-abnormal cadence. Reset to null on any 'normal' window so the next abnormal onset fires immediately. */
+  /** Part F: last time the (now decoupled-from-hysteresis) Haptics alert fired, for the FEEDBACK_REFRACTORY_SEC repeat-while-abnormal cadence. Reset to null once `raw` has genuinely stayed 'normal' for FEEDBACK_EPISODE_GAP_TOLERANCE_SEC (item 3 debounce -- see Step 4), so the next abnormal onset fires immediately, but noisy oscillation right at the boundary can't defeat the cooldown by resetting it on every brief dip. */
   private lastFeedbackFireTime: number | null = null;
+  /** item 3: last window's time where `raw` was 'tachylalia' -- see Step 4. */
+  private lastTachyRawTime: number | null = null;
 
   constructor(settings: Settings, requiredWindows?: number) {
     this.settings = settings;
@@ -125,6 +129,7 @@ export class HysteresisClassifier {
         zRate: 0,
         zPause: 0,
         zSyll: 0,
+        zWordsPer30Sec: 0,
         compositeZ: 0,
         ...ZERO_DISPLAY_ZS,
         sampleSufficient: false,
@@ -138,6 +143,11 @@ export class HysteresisClassifier {
     // Shorter syllables == faster speech == tachy direction, so the raw
     // sign is flipped to match zRate/zPause's "positive = tachy" convention.
     const zSyll = -zscore(avgSyllableDurationSec, baseline.baselineSyllableDurationSec, baseline.baselineSyllableDurationStd, C.SYLLABLE_DURATION_STD_FLOOR);
+    // Item 1/6: condition_2's own z, against the patient's calibrated
+    // baselineWordsPer30Sec/-Std (baseline.ts) -- NOT display-only (see the
+    // ClassificationResult field doc comment), computed here alongside
+    // zRate/zPause/zSyll rather than in `displayZs` below.
+    const zWordsPer30Sec = zscore(wordsPerLast30Sec, baseline.baselineWordsPer30Sec, baseline.baselineWordsPer30SecStd, C.WORDS_PER_30SEC_STD_FLOOR);
 
     const compositeZ = C.COMPOSITE_Z_WEIGHT_RATE * zRate + C.COMPOSITE_Z_WEIGHT_PAUSE * zPause + C.COMPOSITE_Z_WEIGHT_SYLL * zSyll;
 
@@ -191,6 +201,7 @@ export class HysteresisClassifier {
         zRate,
         zPause,
         zSyll,
+        zWordsPer30Sec,
         // Report the last real reading rather than this (unreliable,
         // low-sample) window's fresh compositeZ, so the displayed value
         // doesn't jump around during a low-phonation window.
@@ -203,27 +214,33 @@ export class HysteresisClassifier {
     this.lastCompositeZ = compositeZ;
 
     // --- Step 1: raw label (Part D) ---
-    // Two independent conditions, either sufficient on its own:
-    //   condition_1 = personal, syll/s-baseline-relative (composite_z, or
-    //     the fixed-multiplier fallback when there's no personal std yet)
-    //   condition_2 = population-level: wordsPerLast30Sec above the normal
-    //     range's upper bound (constants.ts's
-    //     WORDS_PER_30SEC_TACHYLALIA_THRESHOLD), independent of this
-    //     patient's calibration -- catches a patient whose own baseline is
-    //     already fast, where condition_1 alone could stay quiet even at a
-    //     genuinely abnormal absolute rate.
+    // Two independent conditions, either sufficient on its own -- both now
+    // measured as a margin above THIS patient's own calibrated baseline
+    // (item 1), using the SAME zTachylalia margin (item 6: one number
+    // drives both the decision and the two-color param-card display, so
+    // they can never disagree):
+    //   condition_1 = compositeZ > zTachylalia (rate/pause/syllable-duration
+    //     composite, or the fixed-multiplier fallback when there's no
+    //     personal std yet)
+    //   condition_2 = zWordsPer30Sec > zTachylalia (wordsPerLast30Sec
+    //     against the patient's own calibrated baselineWordsPer30Sec/-Std --
+    //     was a fixed population number independent of calibration; catches
+    //     a patient whose own baseline rate is already fast, where
+    //     condition_1 alone could stay quiet even at a genuinely abnormal
+    //     absolute rate, but personalized like condition_1 rather than a
+    //     population cutoff that fired on ordinary calibrated-normal speech)
     //
-    // Item 1: condition_1 uses THIS window's own raw compositeZ, not an EMA
-    // of it -- an EMA-smoothed value takes several windows (seconds) to
-    // catch up to a real step change, which was exactly the "still buzzes
-    // noticeably late" bug. The EMA's original purpose (a single noisy
-    // window can't cross the threshold alone) is now covered upstream
-    // instead: sampleSufficient (above) already requires a real amount of
-    // speech in this window, and preprocessing.ts/vad.ts's strengthened
-    // noise rejection (item 2) means a noise-only window is far less likely
-    // to produce an inflated rate/z in the first place.
+    // Both use THIS window's own raw z, not an EMA of it -- an EMA-smoothed
+    // value takes several windows (seconds) to catch up to a real step
+    // change, which was exactly the "still buzzes noticeably late" bug. The
+    // EMA's original purpose (a single noisy window can't cross the
+    // threshold alone) is now covered upstream instead: sampleSufficient
+    // (above) already requires a real amount of speech in this window, and
+    // preprocessing.ts/vad.ts's strengthened noise rejection (item 2) means
+    // a noise-only window is far less likely to produce an inflated rate/z
+    // in the first place.
     const condition1 = baseline.isPersonal ? compositeZ > settings.zTachylalia : articulationRate > baseline.tachylaliaThreshold;
-    const condition2 = wordsPerLast30Sec > C.WORDS_PER_30SEC_TACHYLALIA_THRESHOLD;
+    const condition2 = zWordsPer30Sec > settings.zTachylalia;
     const raw: Classification = condition1 || condition2 ? 'tachylalia' : 'normal';
 
     // Streak bookkeeping kept purely for confidence's `progress` term below
@@ -274,20 +291,32 @@ export class HysteresisClassifier {
     );
     this.lastConfidence = confidence;
 
-    // --- Step 4: feedback (vibration) trigger (Part F) ---
+    // --- Step 4: feedback (vibration) trigger (Part F, item 3 debounce) ---
     // Fires on the FIRST window where condition_1 OR condition_2 is true
     // (same `raw`, same window as Step 2's classification update above --
-    // item 7), then re-fires every FEEDBACK_REFRACTORY_SEC while `raw`
-    // stays 'tachylalia'; `lastFeedbackFireTime` resets on any 'normal'
-    // window so the next abnormal onset is immediate again, not throttled
-    // by a stale cooldown from a prior episode.
+    // item 7), then re-fires every FEEDBACK_REFRACTORY_SEC while the
+    // episode continues.
+    //
+    // "Continues" is judged with a short gap tolerance
+    // (FEEDBACK_EPISODE_GAP_TOLERANCE_SEC), not a strict single-window
+    // flip to 'normal': noisy oscillation right at the boundary used to
+    // reset `lastFeedbackFireTime` on every dip below threshold, so the
+    // very next crossing back above fired an immediate re-buzz -- the
+    // refractory cooldown was defeated by flapping instead of throttling
+    // it. Only once `raw` has genuinely stayed 'normal' for longer than the
+    // gap tolerance does the cooldown reset, so a real new onset after a
+    // real recovery still fires immediately (unaffected by this change --
+    // see classification/`this.confirmed` in Step 2, which is NOT subject
+    // to this tolerance and reverts to NORMAL the instant `raw` does,
+    // exactly as before).
     let trigger = false;
     if (raw === 'tachylalia') {
       if (this.lastFeedbackFireTime === null || currentTime - this.lastFeedbackFireTime >= C.FEEDBACK_REFRACTORY_SEC) {
         trigger = true;
         this.lastFeedbackFireTime = currentTime;
       }
-    } else {
+      this.lastTachyRawTime = currentTime;
+    } else if (this.lastTachyRawTime === null || currentTime - this.lastTachyRawTime >= C.FEEDBACK_EPISODE_GAP_TOLERANCE_SEC) {
       this.lastFeedbackFireTime = null;
     }
     const reason: Classification | null = trigger ? 'tachylalia' : null;
@@ -301,6 +330,7 @@ export class HysteresisClassifier {
       zRate,
       zPause,
       zSyll,
+      zWordsPer30Sec,
       compositeZ,
       ...displayZs,
       sampleSufficient: true,

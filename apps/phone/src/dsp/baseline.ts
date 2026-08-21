@@ -37,6 +37,10 @@ export interface BaselineProfile {
   baselineVoiceActivityPercent: number;
   baselineVoiceActivityStd: number;
 
+  /** Item 1/6: condition_2's personal baseline (was a fixed population number, constants.ts's now-unused WORDS_PER_30SEC_TACHYLALIA_THRESHOLD). Derived from the same per-subwindow speechRateWPM samples as baselineSpeechRateWPM (elapsed-time-normalized, includes pauses -- see sessionPipeline.ts's CalibrationClipResult.speechRateWpmSamples doc comment), divided by 2 (30s = half a minute). */
+  baselineWordsPer30Sec: number;
+  baselineWordsPer30SecStd: number;
+
   tachylaliaThreshold: number; // syllables/sec, upper bound (fixed-multiplier fallback)
 
   /** True only when a genuine per-patient std (>=2 calibration sub-windows) is available — gates z-score vs. fixed-multiplier classification. */
@@ -66,6 +70,8 @@ export function defaultBaselineProfile(settings: Settings): BaselineProfile {
     baselineLoudnessStd: settings.defaultBaselineLoudnessStd,
     baselineVoiceActivityPercent: settings.defaultBaselineVoiceActivityPercent,
     baselineVoiceActivityStd: settings.defaultBaselineVoiceActivityStd,
+    baselineWordsPer30Sec: settings.defaultBaselineWordsPer30Sec,
+    baselineWordsPer30SecStd: settings.defaultBaselineWordsPer30SecStd,
     tachylaliaThreshold: rate * settings.tachylaliaMultiplier,
     isPersonal: false,
   };
@@ -103,6 +109,8 @@ export function baselineFromSubwindowSamples(
     meanPitchSamples?: number[];
     loudnessSamples?: number[];
     voiceActivitySamples?: number[];
+    /** Item 1/6: per-subwindow speechRateWPM samples -- see sessionPipeline.ts's CalibrationClipResult.speechRateWpmSamples doc comment for why WPM (not articulationRateSPS) is the right basis. Converted to words/30sec (÷2) below. */
+    speechRateWpmSamples?: number[];
   }
 ): BaselineProfile {
   const rate = meanStd(rateSamples);
@@ -115,6 +123,7 @@ export function baselineFromSubwindowSamples(
   const pitch = meanStd(extra?.meanPitchSamples ?? []);
   const loudness = meanStd(extra?.loudnessSamples ?? []);
   const voiceActivity = meanStd(extra?.voiceActivitySamples ?? []);
+  const wordsPer30Sec = meanStd((extra?.speechRateWpmSamples ?? []).map((wpm) => wpm / 2));
 
   const rateMean = rate.mean ?? settings.defaultBaselineArticulationRate;
 
@@ -139,6 +148,8 @@ export function baselineFromSubwindowSamples(
     baselineLoudnessStd: loudness.std ?? settings.defaultBaselineLoudnessStd,
     baselineVoiceActivityPercent: voiceActivity.mean ?? settings.defaultBaselineVoiceActivityPercent,
     baselineVoiceActivityStd: voiceActivity.std ?? settings.defaultBaselineVoiceActivityStd,
+    baselineWordsPer30Sec: wordsPer30Sec.mean ?? settings.defaultBaselineWordsPer30Sec,
+    baselineWordsPer30SecStd: wordsPer30Sec.std ?? settings.defaultBaselineWordsPer30SecStd,
     tachylaliaThreshold: rateMean * settings.tachylaliaMultiplier,
     isPersonal: rate.n >= 2,
   };
@@ -173,6 +184,11 @@ export function baselineFromStored(data: Partial<BaselineProfile> | null, settin
     baselineLoudnessStd: data.baselineLoudnessStd ?? settings.defaultBaselineLoudnessStd,
     baselineVoiceActivityPercent: data.baselineVoiceActivityPercent ?? settings.defaultBaselineVoiceActivityPercent,
     baselineVoiceActivityStd: data.baselineVoiceActivityStd ?? settings.defaultBaselineVoiceActivityStd,
+    // Falls back to the population default for a calibration record saved
+    // before this field existed -- same graceful-degradation pattern as
+    // every other baseline* field above, no storage migration needed.
+    baselineWordsPer30Sec: data.baselineWordsPer30Sec ?? settings.defaultBaselineWordsPer30Sec,
+    baselineWordsPer30SecStd: data.baselineWordsPer30SecStd ?? settings.defaultBaselineWordsPer30SecStd,
     tachylaliaThreshold: rate * settings.tachylaliaMultiplier,
     isPersonal,
   };

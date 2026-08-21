@@ -8,7 +8,7 @@
 // on a `feedsComposite: false` param is legible as "unusual, not a
 // trigger."
 import type { MetricsFrame } from '../dsp/sessionPipeline';
-import * as C from '../dsp/constants';
+import { settings } from '../dsp/config';
 
 export type ParamKey = 'rate' | 'pause' | 'wpm' | 'words30' | 'ipuLength' | 'pitch' | 'loudness' | 'voiceActivity';
 
@@ -21,8 +21,6 @@ export interface ParamDef {
   feedsComposite: boolean;
   value: (f: MetricsFrame) => number | null;
   z: (f: MetricsFrame) => number;
-  /** Optional override: Words/30s (Part H) is colored against the fixed population reference range (constants.ts), not a personal-baseline z-score -- when present, this replaces the default tierForZ(z, ...) for this card. */
-  tier?: (f: MetricsFrame) => Tier;
 }
 
 export const PARAMS: ParamDef[] = [
@@ -63,10 +61,10 @@ export const PARAMS: ParamDef[] = [
     z: (f) => f.zRate,
   },
   {
-    // Part H/D: a live population-reference metric -- also condition_2's
-    // raw trigger input in classifier.ts (wordsPerLast30Sec > the normal
-    // range's upper bound). Colored against the fixed population range,
-    // not a personal z-score -- see `tier` below.
+    // Part H/D, item 1/6: condition_2's own raw trigger input in
+    // classifier.ts (zWordsPer30Sec > zTachylalia, against this patient's
+    // calibrated baselineWordsPer30Sec/-Std -- baseline.ts). Colored the
+    // same two-color way as every other card now, off that same z.
     key: 'words30',
     label: 'Words / 30 sec',
     shortLabel: 'Words/30s',
@@ -74,13 +72,7 @@ export const PARAMS: ParamDef[] = [
     digits: 0,
     feedsComposite: false,
     value: (f) => f.wordsPerLast30Sec,
-    z: () => 0,
-    tier: (f) => {
-      const value = f.wordsPerLast30Sec;
-      if (value > C.WORDS_PER_30SEC_NORMAL_MAX) return 'abnormal';
-      if (value < C.WORDS_PER_30SEC_NORMAL_MIN) return 'elevated';
-      return 'normal';
-    },
+    z: (f) => f.zWordsPer30Sec,
   },
   {
     key: 'ipuLength',
@@ -128,13 +120,15 @@ export const PARAMS: ParamDef[] = [
   },
 ];
 
-export type Tier = 'uncalibrated' | 'normal' | 'elevated' | 'abnormal';
+// Item 6: two-color only -- no amber/middle tier. `abnormal` fires at
+// exactly the same margin (settings.zTachylalia) as the classifier's own
+// condition_1/condition_2 decision (classifier.ts), imported directly
+// rather than a separate hardcoded number so the display can never drift
+// out of sync with what actually triggers TACHYLALIA.
+export type Tier = 'uncalibrated' | 'normal' | 'abnormal';
 
-/** |z| < 1 normal, 1–2 amber "elevated", >= 2 red "abnormal" (Part D). Color only — never a trigger; see ParamCard's doc comment. */
+/** |z| >= zTachylalia -> red ('abnormal'), otherwise neutral/white ('normal'). Color only — never itself a trigger (that's compositeZ/zWordsPer30Sec vs. zTachylalia in classifier.ts); see ParamGrid's doc comment. */
 export function tierForZ(z: number, calibrated: boolean): Tier {
   if (!calibrated) return 'uncalibrated';
-  const abs = Math.abs(z);
-  if (abs >= 2.0) return 'abnormal';
-  if (abs >= 1.0) return 'elevated';
-  return 'normal';
+  return Math.abs(z) >= settings.zTachylalia ? 'abnormal' : 'normal';
 }
