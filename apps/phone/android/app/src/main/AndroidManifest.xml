@@ -34,8 +34,8 @@
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
 
-        <!-- Item 7: keeps mic capture + DSP + classification + alerts
-             running while the app is backgrounded/screen-locked -- see
+        <!-- Item 7: keeps mic capture, DSP, classification, and alerts
+             running while the app is backgrounded/screen-locked; see
              RecordingForegroundService.java's doc comment. Must declare
              foregroundServiceType="microphone" (Android 14/targetSdk 34+
              throws at startForeground() otherwise) and stay a private,
