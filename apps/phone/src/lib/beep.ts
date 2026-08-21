@@ -10,7 +10,7 @@ function getContext(): AudioContext | null {
   return sharedContext;
 }
 
-export function playBeep(durationMs = 180, frequencyHz = 880): void {
+export function playBeep(durationMs = 180, frequencyHz = 880, peakGain = 0.25): void {
   const ctx = getContext();
   if (!ctx) return;
 
@@ -23,7 +23,7 @@ export function playBeep(durationMs = 180, frequencyHz = 880): void {
   oscillator.type = 'sine';
   oscillator.frequency.value = frequencyHz;
   gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.01);
+  gain.gain.exponentialRampToValueAtTime(peakGain, ctx.currentTime + 0.01);
   gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + durationMs / 1000);
 
   oscillator.connect(gain);

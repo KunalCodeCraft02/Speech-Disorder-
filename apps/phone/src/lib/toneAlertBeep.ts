@@ -22,5 +22,5 @@ export async function playToneAlertBeep(): Promise<void> {
     await ToneAlertBeepNative.play();
     return;
   }
-  playBeep(180, 880);
+  playBeep(180, 880, 0.6);
 }

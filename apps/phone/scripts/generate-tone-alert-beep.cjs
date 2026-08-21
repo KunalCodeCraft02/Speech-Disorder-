@@ -8,7 +8,7 @@ const path = require('path');
 const SAMPLE_RATE = 44100;
 const DURATION_SEC = 0.18;
 const FREQUENCY_HZ = 880;
-const PEAK_AMPLITUDE = 0.22;
+const PEAK_AMPLITUDE = 0.6;
 const FADE_SEC = 0.02;
 
 const numSamples = Math.round(SAMPLE_RATE * DURATION_SEC);

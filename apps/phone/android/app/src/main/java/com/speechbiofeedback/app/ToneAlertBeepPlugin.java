@@ -19,9 +19,11 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  *
  * SoundPool (not MediaPlayer) because this is exactly what it's built for: a short (<1s),
  * pre-loaded local sound effect played with minimal trigger latency. The asset itself
- * (res/raw/tone_alert_beep.wav, ~180ms soft 880Hz tone -- see
+ * (res/raw/tone_alert_beep.wav, ~180ms 880Hz tone -- see
  * scripts/generate-tone-alert-beep.cjs) is bundled in the APK, so playback never touches
- * the network and works fully offline.
+ * the network and works fully offline. Played at full SoundPool volume (1.0f/1.0f) against
+ * an asset generated at a 0.6 peak amplitude -- loud enough to be reliably audible over
+ * ambient noise/room speech without clipping (0.6 leaves headroom under the 1.0 ceiling).
  *
  * Silent-mode handling: AudioManager.getRingerMode() != RINGER_MODE_NORMAL means the user
  * has silenced the device (silent or vibrate-only) -- skip playback in that case. This is
@@ -62,7 +64,7 @@ public class ToneAlertBeepPlugin extends Plugin {
   @PluginMethod
   public void play(PluginCall call) {
     if (soundPool != null && soundLoaded && soundId != -1 && !isDeviceSilenced()) {
-      soundPool.play(soundId, 0.6f, 0.6f, 1, 0, 1.0f);
+      soundPool.play(soundId, 1.0f, 1.0f, 1, 0, 1.0f);
     }
     call.resolve();
   }
