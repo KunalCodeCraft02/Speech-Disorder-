@@ -142,7 +142,25 @@ export const settings: Settings = {
   zTachylalia: 0.6,
   baselineStdFloor: 0.15,
 
-  toneAlertSustainSec: 3.0,
+  // Lowered 3.0 -> 1.5: the observed real-world delay before "Lower your
+  // tone" fired was noticeably longer than this value alone implied, and
+  // the root cause is upstream of useToneAlert.ts entirely -- frame.loudnessDb
+  // is not an instantaneous reading, it's already a trailing
+  // analysisWindowSec-wide (4.0s) linear-power average of speech-only
+  // samples (features.ts's windowedSpeechLoudnessValues/computeFeatureSet).
+  // So by the time a genuinely loud utterance first pushes that smoothed
+  // value above LOUDNESS_THRESHOLD_DBFS at all, several seconds of loud
+  // speech have typically already elapsed -- and only then does
+  // useToneAlert.ts's own sustain timer (this field) start counting on top
+  // of that. The two stack: the alert was never really "3.0s after the
+  // patient got loud", it was closer to "4s window average of settling +
+  // 3.0s sustain". That 4s-wide window average is itself already a strong
+  // guard against firing on a single loud syllable (one syllable barely
+  // moves a 4s average), so this field's own job is now just to rule out
+  // brief loud bursts the windowed average didn't fully smooth away --
+  // 1.5s is enough for that without re-adding several more seconds of
+  // stacked delay on top of the window's own smoothing.
+  toneAlertSustainSec: 1.5,
   // Independent of the main tachylalia alert's own refractory cadence
   // (FEEDBACK_REFRACTORY_SEC) so the two can never be mistaken for one
   // another -- distinct vibration patterns too, see haptics.ts.

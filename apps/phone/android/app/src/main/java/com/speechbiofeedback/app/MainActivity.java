@@ -32,6 +32,7 @@ public class MainActivity extends BridgeActivity {
   public void onCreate(Bundle savedInstanceState) {
     registerPlugin(HeadsetAudioPlugin.class);
     registerPlugin(RecordingServicePlugin.class);
+    registerPlugin(ToneAlertBeepPlugin.class);
     super.onCreate(savedInstanceState);
 
     if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {

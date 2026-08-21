@@ -3,13 +3,16 @@ import type { MetricsFrame } from '../dsp/sessionPipeline';
 import { settings } from '../dsp/config';
 import * as C from '../dsp/constants';
 import { toneAlertHaptic } from '../lib/haptics';
+import { playToneAlertBeep } from '../lib/toneAlertBeep';
 
 /**
  * Tone alert -- driven by loudness only (item 5: pitch no longer feeds
  * this at all; zPitch/meanPitchHz stay displayed as a metric on their own
  * param card, nothing more). Fires "Lower your tone" plus a distinct
  * single short haptic pulse (see haptics.ts's toneAlertHaptic, clearly
- * different by feel from the continuous tachylalia buzz) once loudnessDb has stayed
+ * different by feel from the continuous tachylalia buzz) and a short bundled
+ * beep (see toneAlertBeep.ts's playToneAlertBeep -- same trigger and cooldown
+ * as the haptic, fired alongside it) once loudnessDb has stayed
  * above LOUDNESS_THRESHOLD_DBFS for toneAlertSustainSec, strictly gated to
  * actual VAD-confirmed speech:
  *
@@ -88,6 +91,7 @@ export function useToneAlert(frame: MetricsFrame | null) {
     lastFiredAtSecRef.current = frame.elapsedSec;
     setToastMessage('Lower your tone');
     void toneAlertHaptic();
+    void playToneAlertBeep();
 
     if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
     dismissTimerRef.current = setTimeout(() => setToastMessage(null), settings.toneAlertToastVisibleSec * 1000);
